@@ -824,6 +824,7 @@ export default function POSPage() {
             inventoryTrackingEnabled={inventoryTrackingEnabled}
             currency={currency}
             lowStockThreshold={lowStockThreshold}
+            cartItems={items}
           />
         </div>
       </div>

@@ -12,6 +12,7 @@ interface CatalogGridProps {
   inventoryTrackingEnabled?: boolean;
   currency?: 'PHP' | 'USD';
   lowStockThreshold?: number;
+  cartItems?: { product_id: string; quantity: number }[];
 }
 
 export default function CatalogGrid({ 
@@ -19,8 +20,17 @@ export default function CatalogGrid({
   onSelectItem, 
   inventoryTrackingEnabled = true,
   currency = 'PHP',
-  lowStockThreshold = 5
+  lowStockThreshold = 5,
+  cartItems = []
 }: CatalogGridProps) {
+  // Build a quick lookup of cart quantities by product ID
+  const cartQtyMap = React.useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const ci of cartItems) {
+      map[ci.product_id] = (map[ci.product_id] || 0) + ci.quantity;
+    }
+    return map;
+  }, [cartItems]);
   const formatPrice = (amount: number) => {
     const locale = currency === 'USD' ? 'en-US' : 'en-PH';
     return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
@@ -84,8 +94,11 @@ export default function CatalogGrid({
       }}
     >
       {products.map((product) => {
-        const isOutOfStock = inventoryTrackingEnabled && product.type === 'PRODUCT' && product.stock !== undefined && product.stock === 0;
-        const isLowStock = inventoryTrackingEnabled && product.type === 'PRODUCT' && product.stock !== undefined && product.stock <= lowStockThreshold && product.stock > 0;
+        // Compute effective (real-time) stock by subtracting what's already in the cart
+        const inCart = cartQtyMap[product.id] || 0;
+        const effectiveStock = product.stock !== undefined ? Math.max(0, product.stock - inCart) : undefined;
+        const isOutOfStock = inventoryTrackingEnabled && product.type === 'PRODUCT' && effectiveStock !== undefined && effectiveStock === 0;
+        const isLowStock = inventoryTrackingEnabled && product.type === 'PRODUCT' && effectiveStock !== undefined && effectiveStock <= lowStockThreshold && effectiveStock > 0;
 
         return (
           <div 
@@ -175,16 +188,17 @@ export default function CatalogGrid({
                 </span>
               )}
 
-              {inventoryTrackingEnabled && product.type === 'PRODUCT' && product.stock !== undefined && (
+              {inventoryTrackingEnabled && product.type === 'PRODUCT' && effectiveStock !== undefined && (
                 <span 
                   className="pos-badge"
                   style={{ 
                     backgroundColor: isOutOfStock ? 'rgba(239, 68, 68, 0.15)' : isLowStock ? 'rgba(245, 158, 11, 0.15)' : 'rgba(71, 85, 105, 0.15)',
                     color: isOutOfStock ? '#ef4444' : isLowStock ? '#f59e0b' : 'var(--text-secondary)',
-                    borderColor: isOutOfStock ? 'rgba(239, 68, 68, 0.3)' : isLowStock ? 'rgba(245, 158, 11, 0.3)' : 'rgba(71, 85, 105, 0.3)'
+                    borderColor: isOutOfStock ? 'rgba(239, 68, 68, 0.3)' : isLowStock ? 'rgba(245, 158, 11, 0.3)' : 'rgba(71, 85, 105, 0.3)',
+                    transition: 'background-color 0.2s, color 0.2s'
                   }}
                 >
-                  Stock: {product.stock}
+                  Stock: {effectiveStock}
                 </span>
               )}
             </div>
