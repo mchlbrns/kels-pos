@@ -101,7 +101,6 @@ export default function POSPage() {
       setVariableProductError('');
     } else {
       addItem(product);
-      setActiveMobilePanel('cart');
     }
   };
 
@@ -911,7 +910,6 @@ export default function POSPage() {
                   addItem(selectedVarProduct, qty, price);
                   setSelectedVarProduct(null);
                   setVariableProductError('');
-                  setActiveMobilePanel('cart');
                 }}
                 className="pos-btn pos-btn-primary"
                 style={{ flex: 2, height: '44px' }}
