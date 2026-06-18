@@ -48,7 +48,7 @@ export default function ReportsPage() {
       const name = prod?.name || 'Unknown Product';
       const basePrice = prod?.base_price || 0;
       const revenue = qty * basePrice;
-      return { name, qty, revenue };
+      return { id, name, qty, revenue };
     })
     .sort((a, b) => b.qty - a.qty)
     .slice(0, 5);
@@ -144,7 +144,7 @@ export default function ReportsPage() {
                 const isLast = idx === topItems.length - 1;
                 return (
                   <div 
-                    key={item.name} 
+                    key={item.id} 
                     style={{ 
                       display: 'flex', 
                       justifyContent: 'space-between', 
