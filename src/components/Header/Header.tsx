@@ -3,7 +3,7 @@
 import OfflineIndicator from "@/components/OfflineIndicator/OfflineIndicator";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import styles from './Header.module.css';
 import { ChevronDown, LogOut, Settings, User } from 'lucide-react';
 import { useState } from "react";
@@ -11,6 +11,7 @@ import { useState } from "react";
 export default function Header() {
   const { session, logout } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
   const handleLogoutClick = () => {
@@ -65,7 +66,7 @@ export default function Header() {
                   if (pathname === '/pos') {
                     window.dispatchEvent(new CustomEvent('open-pos-settings'));
                   } else {
-                    window.location.href = '/pos?settings=true';
+                    router.push('/pos?settings=true');
                   }
                 }} 
                 className={styles.settingsBtn}
@@ -100,7 +101,7 @@ export default function Header() {
                       if (pathname === '/pos') {
                         window.dispatchEvent(new CustomEvent('open-pos-settings'));
                       } else {
-                        window.location.href = '/pos?settings=true';
+                        router.push('/pos?settings=true');
                       }
                     }}
                   >
