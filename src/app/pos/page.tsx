@@ -21,16 +21,14 @@ import { useToasts } from '@/context/ToastContext';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import CustomerSelector from '@/components/CustomerSelector/CustomerSelector';
 
-const formatPrice = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-};
+
 
 export default function POSPage() {
   const { items, addItem, removeItem, updateQuantity, total, clearCart } = useCart();
   const { session, logout } = useAuth();
   const role = session?.role;
   const { showToast } = useToasts();
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [activeMobilePanel, setActiveMobilePanel] = useState<'products' | 'cart'>('products');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -54,6 +52,46 @@ export default function POSPage() {
     }
     return true;
   });
+
+  const [currency, setCurrency] = useState<'PHP' | 'USD'>(() => {
+    if (typeof window !== 'undefined') {
+      const savedCurrency = localStorage.getItem('pos_currency');
+      return savedCurrency === 'USD' ? 'USD' : 'PHP';
+    }
+    return 'PHP';
+  });
+
+  const [lowStockThreshold, setLowStockThreshold] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      const savedThreshold = localStorage.getItem('pos_low_stock_threshold');
+      return savedThreshold ? Number(savedThreshold) : 5;
+    }
+    return 5;
+  });
+
+  const [storeName, setStoreName] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const savedStoreName = localStorage.getItem('pos_store_name');
+      return savedStoreName || 'KELS CAFE & RESTO';
+    }
+    return 'KELS CAFE & RESTO';
+  });
+
+  const [receiptFooter, setReceiptFooter] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const savedFooter = localStorage.getItem('pos_receipt_footer');
+      return savedFooter !== null ? savedFooter : 'Thank you for your business!';
+    }
+    return 'Thank you for your business!';
+  });
+
+  const [autoPrint, setAutoPrint] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const savedAutoPrint = localStorage.getItem('pos_auto_print');
+      return savedAutoPrint !== null ? savedAutoPrint === 'true' : true;
+    }
+    return true;
+  });
   
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(() => {
     if (typeof window !== 'undefined' && window.location.search.includes('settings=true')) {
@@ -61,6 +99,11 @@ export default function POSPage() {
     }
     return false;
   });
+
+  const formatPrice = (amount: number) => {
+    const locale = currency === 'USD' ? 'en-US' : 'en-PH';
+    return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
+  };
   
   // Discount states
   const [discount, setDiscount] = useState(0);
@@ -164,6 +207,15 @@ export default function POSPage() {
     window.addEventListener('open-pos-settings', handleOpenSettings);
     return () => window.removeEventListener('open-pos-settings', handleOpenSettings);
   }, [session, showToast]);
+
+  useEffect(() => {
+    if (completedOrder && autoPrint) {
+      const timer = setTimeout(() => {
+        window.print();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [completedOrder, autoPrint]);
 
   useEffect(() => {
     const handleLogoutRequest = (event: Event) => {
@@ -517,11 +569,29 @@ export default function POSPage() {
     showToast('Current sale discarded.', 'INFO');
   };
 
-  const handleSaveSettings = (rate: number, tracking: boolean) => {
+  const handleSaveSettings = (
+    rate: number,
+    tracking: boolean,
+    curr: 'PHP' | 'USD',
+    threshold: number,
+    sName: string,
+    footer: string,
+    ap: boolean
+  ) => {
     setTaxRate(rate);
     setInventoryTrackingEnabled(tracking);
+    setCurrency(curr);
+    setLowStockThreshold(threshold);
+    setStoreName(sName);
+    setReceiptFooter(footer);
+    setAutoPrint(ap);
     localStorage.setItem('pos_tax_rate', rate.toString());
     localStorage.setItem('pos_inventory_tracking', tracking.toString());
+    localStorage.setItem('pos_currency', curr);
+    localStorage.setItem('pos_low_stock_threshold', threshold.toString());
+    localStorage.setItem('pos_store_name', sName);
+    localStorage.setItem('pos_receipt_footer', footer);
+    localStorage.setItem('pos_auto_print', ap.toString());
     setIsSettingsOpen(false);
     showToast('Configurations saved.', 'SUCCESS');
   };
@@ -752,6 +822,8 @@ export default function POSPage() {
             searchTerm={searchTerm} 
             onSelectItem={handleSelectItem} 
             inventoryTrackingEnabled={inventoryTrackingEnabled}
+            currency={currency}
+            lowStockThreshold={lowStockThreshold}
           />
         </div>
       </div>
@@ -785,6 +857,7 @@ export default function POSPage() {
           onHold={handleHold}
           isLoading={isProcessing}
           selectedCustomer={selectedCustomer}
+          currency={currency}
         />
       </div>
 
@@ -793,6 +866,11 @@ export default function POSPage() {
         <SettingsModal 
           currentTaxRate={taxRate}
           currentTracking={inventoryTrackingEnabled}
+          currentCurrency={currency}
+          currentLowStockThreshold={lowStockThreshold}
+          currentStoreName={storeName}
+          currentReceiptFooter={receiptFooter}
+          currentAutoPrint={autoPrint}
           onSave={handleSaveSettings}
           onClose={() => setIsSettingsOpen(false)}
         />
@@ -1454,6 +1532,9 @@ export default function POSPage() {
             setSelectedCustomer(null);
             setDiscount(0);
           }}
+          currency={currency}
+          storeName={storeName}
+          receiptFooter={receiptFooter}
         />
       )}
 
@@ -1472,17 +1553,53 @@ export default function POSPage() {
 interface SettingsModalProps {
   currentTaxRate: number;
   currentTracking: boolean;
-  onSave: (taxRate: number, inventoryTracking: boolean) => void;
+  currentCurrency: 'PHP' | 'USD';
+  currentLowStockThreshold: number;
+  currentStoreName: string;
+  currentReceiptFooter: string;
+  currentAutoPrint: boolean;
+  onSave: (
+    taxRate: number,
+    inventoryTracking: boolean,
+    currency: 'PHP' | 'USD',
+    lowStockThreshold: number,
+    storeName: string,
+    receiptFooter: string,
+    autoPrint: boolean
+  ) => void;
   onClose: () => void;
 }
 
-function SettingsModal({ currentTaxRate, currentTracking, onSave, onClose }: SettingsModalProps) {
+function SettingsModal({
+  currentTaxRate,
+  currentTracking,
+  currentCurrency,
+  currentLowStockThreshold,
+  currentStoreName,
+  currentReceiptFooter,
+  currentAutoPrint,
+  onSave,
+  onClose
+}: SettingsModalProps) {
   const [taxRate, setTaxRate] = useState(currentTaxRate.toString());
   const [tracking, setTracking] = useState(currentTracking);
+  const [currency, setCurrency] = useState<'PHP' | 'USD'>(currentCurrency);
+  const [lowStockThreshold, setLowStockThreshold] = useState(currentLowStockThreshold.toString());
+  const [storeName, setStoreName] = useState(currentStoreName);
+  const [receiptFooter, setReceiptFooter] = useState(currentReceiptFooter);
+  const [autoPrint, setAutoPrint] = useState(currentAutoPrint);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(Number(taxRate) || 0, tracking);
+    onSave(
+      Number(taxRate) || 0,
+      tracking,
+      currency,
+      Number(lowStockThreshold) || 0,
+      storeName,
+      receiptFooter,
+      autoPrint
+    );
   };
 
   return (
@@ -1501,7 +1618,7 @@ function SettingsModal({ currentTaxRate, currentTracking, onSave, onClose }: Set
       <form 
         onSubmit={handleSubmit} 
         className="pos-card animate-in fade-in duration-200"
-        style={{ width: '400px', maxWidth: '95vw', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+        style={{ width: '420px', maxWidth: '95vw', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
       >
         <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border)', backgroundColor: 'var(--bg-surface)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'white' }}>
@@ -1513,7 +1630,8 @@ function SettingsModal({ currentTaxRate, currentTracking, onSave, onClose }: Set
           </button>
         </div>
 
-        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '55vh', overflowY: 'auto' }}>
+          {/* Default Tax Rate */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Default Tax Rate (%)</label>
             <input 
@@ -1527,6 +1645,61 @@ function SettingsModal({ currentTaxRate, currentTracking, onSave, onClose }: Set
             />
           </div>
 
+          {/* Currency Sign Dropdown */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Currency Sign</label>
+            <select 
+              className="pos-input" 
+              style={{ fontWeight: 600, backgroundColor: 'var(--bg-elevated)', color: 'white', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 14px', outline: 'none' }}
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value as 'PHP' | 'USD')}
+            >
+              <option value="PHP">Philippine Peso (₱)</option>
+              <option value="USD">US Dollar ($)</option>
+            </select>
+          </div>
+
+          {/* Low Stock Alert Threshold */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Low Stock Alert Threshold</label>
+            <input 
+              type="number"
+              min="0"
+              required
+              className="pos-input"
+              style={{ fontWeight: 600 }}
+              value={lowStockThreshold}
+              onChange={(e) => setLowStockThreshold(e.target.value)}
+            />
+          </div>
+
+          {/* Store Name on Receipt */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Store Name on Receipt</label>
+            <input 
+              type="text"
+              required
+              className="pos-input"
+              style={{ fontWeight: 600 }}
+              value={storeName}
+              onChange={(e) => setStoreName(e.target.value)}
+            />
+          </div>
+
+          {/* Receipt Footer Note */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Receipt Footer Note</label>
+            <input 
+              type="text"
+              required
+              className="pos-input"
+              style={{ fontWeight: 600 }}
+              value={receiptFooter}
+              onChange={(e) => setReceiptFooter(e.target.value)}
+            />
+          </div>
+
+          {/* Inventory Tracking Toggle */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', backgroundColor: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ fontSize: '14px', fontWeight: 600, color: 'white' }}>Inventory Tracking</span>
@@ -1537,6 +1710,20 @@ function SettingsModal({ currentTaxRate, currentTracking, onSave, onClose }: Set
               style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--primary)' }}
               checked={tracking}
               onChange={(e) => setTracking(e.target.checked)}
+            />
+          </div>
+
+          {/* Auto-Print Toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', backgroundColor: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: '14px', fontWeight: 600, color: 'white' }}>Auto-Print Receipt</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Trigger print dialog automatically upon checkout</span>
+            </div>
+            <input 
+              type="checkbox"
+              style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: 'var(--primary)' }}
+              checked={autoPrint}
+              onChange={(e) => setAutoPrint(e.target.checked)}
             />
           </div>
         </div>
@@ -1561,10 +1748,17 @@ interface ReceiptModalProps {
   changeDue: number;
   cashierName: string;
   onClose: () => void;
+  currency: 'PHP' | 'USD';
+  storeName: string;
+  receiptFooter: string;
 }
 
-function ReceiptModal({ order, taxRate, changeDue, cashierName, onClose }: ReceiptModalProps) {
+function ReceiptModal({ order, taxRate, changeDue, cashierName, onClose, currency, storeName, receiptFooter }: ReceiptModalProps) {
   const [products, setProducts] = useState<Record<string, Product>>({});
+  const formatPrice = (amount: number) => {
+    const locale = currency === 'USD' ? 'en-US' : 'en-PH';
+    return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
+  };
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -1631,7 +1825,7 @@ function ReceiptModal({ order, taxRate, changeDue, cashierName, onClose }: Recei
           >
           {/* Store Header */}
           <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-            <span style={{ fontSize: '20px', fontWeight: 700, color: '#1a1a1a', display: 'block' }}>KELS POS</span>
+            <span style={{ fontSize: '20px', fontWeight: 700, color: '#1a1a1a', display: 'block' }}>{storeName}</span>
             <span style={{ fontSize: '12px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' }}>Omnichannel Retail</span>
             <span style={{ fontSize: '12px', color: '#555', display: 'block' }}>123 POS Main St, Digital City</span>
             <span style={{ fontSize: '12px', color: '#555', display: 'block' }}>Tel: (555) 123-4567</span>
@@ -1739,7 +1933,7 @@ function ReceiptModal({ order, taxRate, changeDue, cashierName, onClose }: Recei
           <div style={{ textAlign: 'center', margin: '12px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
             <span style={{ color: '#22c55e', fontSize: '28px' }}>✅</span>
             <span style={{ fontSize: '15px', fontWeight: 700, color: '#1a1a1a' }}>Transaction Complete</span>
-            <span style={{ fontSize: '13px', color: '#555' }}>Thank you for shopping with us!</span>
+            <span style={{ fontSize: '13px', color: '#555' }}>{receiptFooter}</span>
           </div>
 
           {/* Loyalty Note */}

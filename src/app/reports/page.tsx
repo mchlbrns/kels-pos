@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
 import { 
@@ -14,11 +14,20 @@ import {
   Lightbulb
 } from 'lucide-react';
 
-const formatPrice = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-};
-
 export default function ReportsPage() {
+  const [currency] = useState<'PHP' | 'USD'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('pos_currency');
+      return saved === 'USD' ? 'USD' : 'PHP';
+    }
+    return 'PHP';
+  });
+
+  const formatPrice = (amount: number) => {
+    const locale = currency === 'USD' ? 'en-US' : 'en-PH';
+    return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
+  };
+
   const startOfDay = new Date();
   startOfDay.setHours(0,0,0,0);
 

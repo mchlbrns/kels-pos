@@ -8,11 +8,20 @@ import { Search, Package } from 'lucide-react';
 import styles from './Catalog.module.css';
 import { v4 as uuidv4 } from 'uuid';
 
-const formatPrice = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-};
-
 export default function CatalogPage() {
+  const [currency] = useState<'PHP' | 'USD'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('pos_currency');
+      return saved === 'USD' ? 'USD' : 'PHP';
+    }
+    return 'PHP';
+  });
+
+  const formatPrice = (amount: number) => {
+    const locale = currency === 'USD' ? 'en-US' : 'en-PH';
+    return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
+  };
+
   const products = useLiveQuery(() => db.products.toArray());
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);

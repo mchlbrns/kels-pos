@@ -17,16 +17,24 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-const formatPrice = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-};
-
 const normalizeOrderStatus = (status: string) => status === 'PAID' ? 'COMPLETED' : status;
 
 export default function OrdersPage() {
   const { session } = useAuth();
   const role = session?.role;
   const [searchTerm, setSearchTerm] = useState('');
+  const [currency] = useState<'PHP' | 'USD'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('pos_currency');
+      return saved === 'USD' ? 'USD' : 'PHP';
+    }
+    return 'PHP';
+  });
+
+  const formatPrice = (amount: number) => {
+    const locale = currency === 'USD' ? 'en-US' : 'en-PH';
+    return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
+  };
 
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [dateFilter, setDateFilter] = useState<string>('ALL'); // ALL, TODAY, YESTERDAY, LAST_7_DAYS, LAST_30_DAYS
@@ -582,6 +590,7 @@ export default function OrdersPage() {
           order={selectedOrder}
           customerMap={customerMap}
           onClose={() => setSelectedOrder(null)}
+          formatPrice={formatPrice}
         />
       )}
       {refundOrder && (
@@ -606,9 +615,10 @@ interface OrderDetailModalProps {
   order: Order;
   customerMap: Record<string, Customer>;
   onClose: () => void;
+  formatPrice: (amount: number) => string;
 }
 
-function OrderDetailModal({ order, customerMap, onClose }: OrderDetailModalProps) {
+function OrderDetailModal({ order, customerMap, onClose, formatPrice }: OrderDetailModalProps) {
   const [products, setProducts] = useState<Record<string, Product>>({});
 
   useEffect(() => {

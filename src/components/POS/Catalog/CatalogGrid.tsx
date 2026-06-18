@@ -10,13 +10,21 @@ interface CatalogGridProps {
   searchTerm: string;
   onSelectItem: (product: Product) => void;
   inventoryTrackingEnabled?: boolean;
+  currency?: 'PHP' | 'USD';
+  lowStockThreshold?: number;
 }
 
-const formatPrice = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-};
-
-export default function CatalogGrid({ searchTerm, onSelectItem, inventoryTrackingEnabled = true }: CatalogGridProps) {
+export default function CatalogGrid({ 
+  searchTerm, 
+  onSelectItem, 
+  inventoryTrackingEnabled = true,
+  currency = 'PHP',
+  lowStockThreshold = 5
+}: CatalogGridProps) {
+  const formatPrice = (amount: number) => {
+    const locale = currency === 'USD' ? 'en-US' : 'en-PH';
+    return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
+  };
   const viteEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
   const isDevMode = viteEnv?.VITE_DEV_MODE === 'true' || process.env.VITE_DEV_MODE === 'true';
 
@@ -76,8 +84,8 @@ export default function CatalogGrid({ searchTerm, onSelectItem, inventoryTrackin
       }}
     >
       {products.map((product) => {
-        const isLowStock = inventoryTrackingEnabled && product.type === 'PRODUCT' && product.stock !== undefined && product.stock <= 5;
         const isOutOfStock = inventoryTrackingEnabled && product.type === 'PRODUCT' && product.stock !== undefined && product.stock === 0;
+        const isLowStock = inventoryTrackingEnabled && product.type === 'PRODUCT' && product.stock !== undefined && product.stock <= lowStockThreshold && product.stock > 0;
 
         return (
           <div 
@@ -92,7 +100,8 @@ export default function CatalogGrid({ searchTerm, onSelectItem, inventoryTrackin
               gap: '8px',
               opacity: isOutOfStock ? 0.6 : 1,
               position: 'relative',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              borderColor: isLowStock ? '#f59e0b' : 'var(--border)'
             }}
             onMouseOver={(e) => {
               e.currentTarget.style.borderColor = 'var(--primary)';
@@ -100,7 +109,7 @@ export default function CatalogGrid({ searchTerm, onSelectItem, inventoryTrackin
               e.currentTarget.style.transform = 'translateY(-1px)';
             }}
             onMouseOut={(e) => {
-              e.currentTarget.style.borderColor = 'var(--border)';
+              e.currentTarget.style.borderColor = isLowStock ? '#f59e0b' : 'var(--border)';
               e.currentTarget.style.boxShadow = 'var(--shadow)';
               e.currentTarget.style.transform = 'translateY(0)';
             }}
@@ -170,9 +179,9 @@ export default function CatalogGrid({ searchTerm, onSelectItem, inventoryTrackin
                 <span 
                   className="pos-badge"
                   style={{ 
-                    backgroundColor: isOutOfStock ? 'rgba(239, 68, 68, 0.15)' : isLowStock ? 'rgba(239, 68, 68, 0.15)' : 'rgba(71, 85, 105, 0.15)',
-                    color: isOutOfStock ? '#ef4444' : isLowStock ? '#ef4444' : 'var(--text-secondary)',
-                    borderColor: isOutOfStock ? 'rgba(239, 68, 68, 0.3)' : isLowStock ? 'rgba(239, 68, 68, 0.3)' : 'rgba(71, 85, 105, 0.3)'
+                    backgroundColor: isOutOfStock ? 'rgba(239, 68, 68, 0.15)' : isLowStock ? 'rgba(245, 158, 11, 0.15)' : 'rgba(71, 85, 105, 0.15)',
+                    color: isOutOfStock ? '#ef4444' : isLowStock ? '#f59e0b' : 'var(--text-secondary)',
+                    borderColor: isOutOfStock ? 'rgba(239, 68, 68, 0.3)' : isLowStock ? 'rgba(245, 158, 11, 0.3)' : 'rgba(71, 85, 105, 0.3)'
                   }}
                 >
                   Stock: {product.stock}

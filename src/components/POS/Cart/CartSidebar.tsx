@@ -21,11 +21,8 @@ interface CartSidebarProps {
   onHold: () => void;
   isLoading?: boolean;
   selectedCustomer: Customer | null;
+  currency: 'PHP' | 'USD';
 }
-
-const formatPrice = (amount: number) => {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-};
 
 export default function CartSidebar({
   items,
@@ -43,8 +40,13 @@ export default function CartSidebar({
   onCheckout,
   onHold,
   isLoading,
-  selectedCustomer
+  selectedCustomer,
+  currency
 }: CartSidebarProps) {
+  const formatPrice = (amount: number) => {
+    const locale = currency === 'USD' ? 'en-US' : 'en-PH';
+    return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
+  };
   // Compute loyalty points earned (1 point per dollar)
   const pointsEarned = Math.floor(total);
 
