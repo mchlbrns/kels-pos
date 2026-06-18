@@ -1,0 +1,176 @@
+.container {
+  margin-bottom: 1rem;
+}
+
+.placeholder {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px;
+  background: #f0f7ff;
+  border: 1px dashed #2196f3;
+  color: #2196f3;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.selected {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: #e3f2fd;
+  border: 1px solid #2196f3;
+  border-radius: 8px;
+  color: #1976d2;
+}
+
+.info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.info div {
+  display: flex;
+  flex-direction: column;
+}
+
+.info span {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.remove {
+  background: transparent;
+  border: none;
+  color: #1976d2;
+  cursor: pointer;
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+}
+
+.modal {
+  background: #fff;
+  width: 100%;
+  max-width: 450px;
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modalHeader h3 { margin: 0; }
+.modalHeader button { background: none; border: none; cursor: pointer; }
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+
+.searchBox input {
+  border: none;
+  background: transparent;
+  width: 100%;
+  outline: none;
+}
+
+.results {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.resultItem {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  padding: 10px;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.resultItem:hover {
+  background: #f9f9f9;
+}
+
+.resultItem span {
+  font-size: 12px;
+  color: #666;
+}
+
+.noResults {
+  text-align: center;
+  color: #999;
+  padding: 1rem;
+}
+
+.toggleAdd {
+  padding: 10px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.addForm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.addForm input {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.formButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.formButtons button {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #ddd;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.formButtons .submit {
+  background: #2196f3;
+  color: #fff;
+  border: none;
+}

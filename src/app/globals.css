@@ -47,3 +47,9 @@ a {
     color-scheme: dark;
   }
 }
+
+@media print { 
+  header, nav, button { 
+    display: none !important; 
+  } 
+}
