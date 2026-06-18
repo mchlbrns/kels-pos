@@ -9,12 +9,16 @@ import CatalogGrid from '@/components/POS/Catalog/CatalogGrid';
 import CartSidebar from '@/components/POS/Cart/CartSidebar';
 import BarcodeScanner from '@/components/POS/Scanner/BarcodeScanner';
 import { useCart } from '@/hooks/useCart';
+import PinModal from '@/components/PinModal/PinModal';
+import ConfirmModal from '@/components/ConfirmModal/ConfirmModal';
 
 import { db, type Order, type Product, type Customer } from '@/lib/db';
 import { addToSyncQueue } from '@/lib/sync';
 import { v4 as uuidv4 } from 'uuid';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useAuth } from '@/context/AuthContext';
+import { useToasts } from '@/context/ToastContext';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
 import CustomerSelector from '@/components/CustomerSelector/CustomerSelector';
 
 const formatPrice = (amount: number) => {
@@ -23,9 +27,12 @@ const formatPrice = (amount: number) => {
 
 export default function POSPage() {
   const { items, addItem, removeItem, updateQuantity, total, clearCart } = useCart();
-  const { role } = useAuth();
+  const { session, logout } = useAuth();
+  const role = session?.role;
+  const { showToast } = useToasts();
   
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeMobilePanel, setActiveMobilePanel] = useState<'products' | 'cart'>('products');
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isRecallOpen, setIsRecallOpen] = useState(false);
@@ -60,9 +67,11 @@ export default function POSPage() {
   const [amountTendered, setAmountTendered] = useState<string>('');
   const [splitCashAmount, setSplitCashAmount] = useState<string>('');
   const [splitCardAmount, setSplitCardAmount] = useState<string>('');
+  const [needsManagerPinForCheckout, setNeedsManagerPinForCheckout] = useState(false);
   
   // New Order / Hold prompt
   const [showNewOrderPrompt, setShowNewOrderPrompt] = useState(false);
+  const [pendingLogoutAfterCartChoice, setPendingLogoutAfterCartChoice] = useState(false);
 
   // Success / Receipt Screen state
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
@@ -71,20 +80,49 @@ export default function POSPage() {
   const [selectedVarProduct, setSelectedVarProduct] = useState<Product | null>(null);
   const [overrideQty, setOverrideQty] = useState<string>('1');
   const [overridePrice, setOverridePrice] = useState<string>('');
+  const [variableProductError, setVariableProductError] = useState('');
 
-  // Toast message state
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [toastType, setToastType] = useState<'SUCCESS' | 'ERROR' | 'WARNING' | 'INFO'>('INFO');
+  // Manager Override Stock states
+  const [overrideStockProduct, setOverrideStockProduct] = useState<Product | null>(null);
+  const [needsManagerPinForStock, setNeedsManagerPinForStock] = useState(false);
+  const [heldOrderToDelete, setHeldOrderToDelete] = useState<Order | null>(null);
 
-  const handleSelectItem = (product: Product) => {
+  // Focus traps for modals/drawers
+  const checkoutTrapRef = useFocusTrap(isCheckoutOpen);
+  const varProductTrapRef = useFocusTrap(!!selectedVarProduct);
+  const newOrderTrapRef = useFocusTrap(showNewOrderPrompt);
+  const recallTrapRef = useFocusTrap(isRecallOpen);
+
+  const addProductToCart = (product: Product) => {
     if (product.is_variable) {
       setSelectedVarProduct(product);
       setOverrideQty('1');
       setOverridePrice(product.base_price.toString());
+      setVariableProductError('');
     } else {
       addItem(product);
+      setActiveMobilePanel('cart');
     }
   };
+
+  const handleSelectItem = (product: Product) => {
+    const isOutOfStock = inventoryTrackingEnabled && product.type === 'PRODUCT' && product.stock !== undefined && product.stock === 0;
+    
+    if (isOutOfStock) {
+      if (role === 'MANAGER') {
+        if (confirm(`${product.name} is out of stock. Add to cart anyway?`)) {
+          addProductToCart(product);
+        }
+      } else {
+        setOverrideStockProduct(product);
+        setNeedsManagerPinForStock(true);
+      }
+      return;
+    }
+
+    addProductToCart(product);
+  };
+
 
   // Load settings on mount
   useEffect(() => {
@@ -105,18 +143,70 @@ export default function POSPage() {
     checkAndSeed();
 
     // Listen to settings gear clicks from Header
-    const handleOpenSettings = () => setIsSettingsOpen(true);
+    const handleOpenSettings = () => {
+      if (session?.role === 'MANAGER') {
+        setIsSettingsOpen(true);
+      } else {
+        showToast('Access denied. Manager role required.', 'ERROR');
+      }
+    };
     window.addEventListener('open-pos-settings', handleOpenSettings);
     return () => window.removeEventListener('open-pos-settings', handleOpenSettings);
-  }, []);
+  }, [session, showToast]);
 
-  // Toast auto-dismiss
   useEffect(() => {
-    if (toastMessage) {
-      const timer = setTimeout(() => setToastMessage(null), 3500);
-      return () => clearTimeout(timer);
-    }
-  }, [toastMessage]);
+    const handleLogoutRequest = (event: Event) => {
+      if (items.length === 0) return;
+
+      event.preventDefault();
+      setPendingLogoutAfterCartChoice(true);
+      setShowNewOrderPrompt(true);
+    };
+
+    window.addEventListener('request-pos-logout', handleLogoutRequest);
+    return () => window.removeEventListener('request-pos-logout', handleLogoutRequest);
+  }, [items.length]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (completedOrder) {
+          setCompletedOrder(null);
+        } else if (isCheckoutOpen) {
+          setIsCheckoutOpen(false);
+        } else if (isRecallOpen) {
+          setIsRecallOpen(false);
+        } else if (selectedVarProduct) {
+          setSelectedVarProduct(null);
+        } else if (showNewOrderPrompt) {
+          setShowNewOrderPrompt(false);
+          setPendingLogoutAfterCartChoice(false);
+        } else if (isSettingsOpen) {
+          setIsSettingsOpen(false);
+        } else if (needsManagerPinForCheckout) {
+          setNeedsManagerPinForCheckout(false);
+        } else if (needsManagerPinForStock) {
+          setNeedsManagerPinForStock(false);
+          setOverrideStockProduct(null);
+        } else if (heldOrderToDelete) {
+          setHeldOrderToDelete(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    completedOrder,
+    isCheckoutOpen,
+    isRecallOpen,
+    selectedVarProduct,
+    showNewOrderPrompt,
+    isSettingsOpen,
+    needsManagerPinForCheckout,
+    needsManagerPinForStock,
+    heldOrderToDelete
+  ]);
+
 
   // Query live held orders
   const heldOrders = useLiveQuery(() => 
@@ -126,22 +216,26 @@ export default function POSPage() {
   // Query live products for real-time search dropdown
   const searchDropdownResults = useLiveQuery(async () => {
     if (!searchTerm.trim()) return [];
-    return await db.products
-      .where('name')
-      .startsWithIgnoreCase(searchTerm)
-      .or('sku_barcode')
-      .equals(searchTerm)
-      .limit(8)
-      .toArray();
+    const allProducts = await db.products.toArray();
+    const query = searchTerm.toLowerCase();
+    return allProducts
+      .filter(p => {
+        const nameMatch = p.name.toLowerCase().includes(query);
+        const skuMatch = p.sku_barcode ? p.sku_barcode.toLowerCase().includes(query) : false;
+        return nameMatch || skuMatch;
+      })
+      .slice(0, 8);
   }, [searchTerm]);
+
 
   // Calculations
   const subtotal = total;
   const discountAmount = useMemo(() => {
     if (discountType === 'percentage') {
-      return subtotal * (discount / 100);
+      const pct = Math.min(100, Math.max(0, discount));
+      return subtotal * (pct / 100);
     }
-    return discount;
+    return Math.min(subtotal, Math.max(0, discount));
   }, [subtotal, discount, discountType]);
 
   const subtotalAfterDiscount = Math.max(0, subtotal - discountAmount);
@@ -150,29 +244,48 @@ export default function POSPage() {
   }, [subtotalAfterDiscount, taxRate]);
 
   const finalTotal = subtotalAfterDiscount + taxAmount;
+  const grandTotal = useMemo(() => parseFloat(finalTotal.toFixed(2)), [finalTotal]);
+
+  const isDiscountInvalid = useMemo(() => {
+    return (discountType === 'percentage' && discount > 100) || (discountType === 'flat' && discount > subtotal);
+  }, [discount, discountType, subtotal]);
 
   // Change computation for Cash
   const changeDue = useMemo(() => {
     const tendered = Number(amountTendered) || 0;
-    if (tendered <= finalTotal) return 0;
-    return tendered - finalTotal;
-  }, [amountTendered, finalTotal]);
+    if (tendered <= grandTotal) return 0;
+    return parseFloat((tendered - grandTotal).toFixed(2));
+  }, [amountTendered, grandTotal]);
 
   const handleScan = async (barcode: string) => {
     const product = await db.products.where('sku_barcode').equals(barcode).first();
     if (product) {
-      addItem(product);
-      setIsScannerOpen(false);
-      setToastType('SUCCESS');
-      setToastMessage(`Scanned: ${product.name}`);
+      const isOutOfStock = inventoryTrackingEnabled && product.type === 'PRODUCT' && product.stock !== undefined && product.stock === 0;
+      if (isOutOfStock) {
+        if (role === 'MANAGER') {
+          if (confirm(`${product.name} is out of stock. Add to cart anyway?`)) {
+            addProductToCart(product);
+            showToast(`Scanned (Override): ${product.name}`, 'SUCCESS');
+          }
+        } else {
+          setOverrideStockProduct(product);
+          setNeedsManagerPinForStock(true);
+        }
+      } else {
+        addProductToCart(product);
+        setIsScannerOpen(false);
+        showToast(`Scanned: ${product.name}`, 'SUCCESS');
+      }
     } else {
-      setToastType('ERROR');
-      setToastMessage(`No product found for barcode: ${barcode}`);
+      showToast(`No product found for barcode: ${barcode}`, 'ERROR');
     }
   };
 
   const handleHold = async () => {
-    if (items.length === 0) return;
+    if (items.length === 0) {
+      showToast('Cannot hold an empty order.', 'WARNING');
+      return;
+    }
     try {
       const orderId = uuidv4();
       const localId = `HOLD-${Date.now()}`;
@@ -181,7 +294,7 @@ export default function POSPage() {
         id: orderId,
         local_id: localId,
         customer_id: selectedCustomer?.id || undefined,
-        total: finalTotal,
+        total: grandTotal,
         status: 'HELD',
         payment_type: 'CASH',
         created_at: Date.now(),
@@ -194,19 +307,17 @@ export default function POSPage() {
         sync_status: 'PENDING',
         discount: discountAmount,
         tax: taxAmount,
-        cashier: role || 'STAFF'
+        cashier: session?.name || 'STAFF'
       };
 
       await db.orders.add(heldOrder);
       clearCart();
       setSelectedCustomer(null);
       setDiscount(0);
-      setToastType('SUCCESS');
-      setToastMessage('Order put on hold.');
+      showToast('Order put on hold.', 'SUCCESS');
     } catch (error) {
       console.error('Hold failed:', error);
-      setToastType('ERROR');
-      setToastMessage('Failed to put order on hold.');
+      showToast('Failed to put order on hold.', 'ERROR');
     }
   };
 
@@ -232,27 +343,44 @@ export default function POSPage() {
 
     await db.orders.delete(order.id);
     setIsRecallOpen(false);
-    setToastType('SUCCESS');
-    setToastMessage(`Recalled order: ${order.local_id}`);
+    showToast(`Recalled order: ${order.local_id}`, 'SUCCESS');
   };
 
   const deleteHeldOrder = async (orderId: string) => {
-    if (confirm('Are you sure you want to delete this held order? This action cannot be undone.')) {
-      await db.orders.delete(orderId);
-      setToastType('INFO');
-      setToastMessage('Held order deleted.');
+    const order = await db.orders.get(orderId);
+    if (order) {
+      setHeldOrderToDelete(order);
     }
   };
 
   // Open checkout payment modal
-  const handleOpenCheckout = () => {
-    if (items.length === 0) return;
-    setAmountTendered(finalTotal.toFixed(2));
-    setSplitCashAmount((finalTotal / 2).toFixed(2));
-    setSplitCardAmount((finalTotal / 2).toFixed(2));
+  const openCheckoutModal = () => {
+    setAmountTendered(grandTotal.toFixed(2));
+    setSplitCashAmount((grandTotal / 2).toFixed(2));
+    setSplitCardAmount((grandTotal / 2).toFixed(2));
     setPaymentMethod('CASH');
     setIsCheckoutOpen(true);
   };
+
+  const handleOpenCheckout = () => {
+    if (items.length === 0) {
+      showToast('Please add items to the order before checking out.', 'WARNING');
+      return;
+    }
+
+    if (isDiscountInvalid) {
+      showToast('Discount cannot exceed the order total.', 'ERROR');
+      return;
+    }
+
+    if (grandTotal === 0) {
+      setNeedsManagerPinForCheckout(true);
+      return;
+    }
+
+    openCheckoutModal();
+  };
+
 
   // Confirm payment & process order save
   const handleProcessCheckout = async () => {
@@ -264,7 +392,7 @@ export default function POSPage() {
       // Validation
       if (paymentMethod === 'CASH') {
         const tendered = Number(amountTendered) || 0;
-        if (tendered < finalTotal) {
+        if (tendered < grandTotal) {
           alert('Tendered amount must be at least the total amount due.');
           setIsProcessing(false);
           return;
@@ -272,8 +400,8 @@ export default function POSPage() {
       } else if (paymentMethod === 'SPLIT') {
         const cashAmt = Number(splitCashAmount) || 0;
         const cardAmt = Number(splitCardAmount) || 0;
-        if (Math.abs((cashAmt + cardAmt) - finalTotal) > 0.01) {
-          alert(`Split amounts ($${(cashAmt + cardAmt).toFixed(2)}) must equal the total ($${finalTotal.toFixed(2)}).`);
+        if (Math.abs((cashAmt + cardAmt) - grandTotal) > 0.01) {
+          alert(`Split amounts ($${(cashAmt + cardAmt).toFixed(2)}) must equal the total ($${grandTotal.toFixed(2)}).`);
           setIsProcessing(false);
           return;
         }
@@ -283,7 +411,7 @@ export default function POSPage() {
         id: orderId,
         local_id: localId,
         customer_id: selectedCustomer?.id || undefined,
-        total: finalTotal,
+        total: grandTotal,
         status: 'COMPLETED',
         payment_type: paymentMethod,
         created_at: Date.now(),
@@ -296,7 +424,7 @@ export default function POSPage() {
         sync_status: 'PENDING',
         discount: discountAmount,
         tax: taxAmount,
-        cashier: role || 'STAFF'
+        cashier: session?.name || 'STAFF'
       };
 
       // 1. Decr stock in Dexie if inventory tracking is enabled
@@ -317,7 +445,7 @@ export default function POSPage() {
       // 3. Update customer points and visits if selected
       let updatedCust: Customer | null = null;
       if (selectedCustomer) {
-        const earnedPoints = Math.floor(finalTotal); // 1 point per $1
+        const earnedPoints = Math.floor(grandTotal); // 1 point per $1
         updatedCust = {
           ...selectedCustomer,
           points: selectedCustomer.points + earnedPoints,
@@ -336,6 +464,7 @@ export default function POSPage() {
         ...newOrder,
         customer_id: selectedCustomer ? selectedCustomer.name : undefined // hijack ID for displaying name on receipt easily
       });
+
       setIsCheckoutOpen(false);
     } catch (error) {
       console.error('Checkout failed:', error);
@@ -358,6 +487,10 @@ export default function POSPage() {
   const handleNewOrderConfirmHold = async () => {
     await handleHold();
     setShowNewOrderPrompt(false);
+    if (pendingLogoutAfterCartChoice) {
+      setPendingLogoutAfterCartChoice(false);
+      logout();
+    }
   };
 
   const handleNewOrderConfirmDiscard = () => {
@@ -365,8 +498,12 @@ export default function POSPage() {
     setSelectedCustomer(null);
     setDiscount(0);
     setShowNewOrderPrompt(false);
-    setToastType('INFO');
-    setToastMessage('Current sale discarded.');
+    if (pendingLogoutAfterCartChoice) {
+      setPendingLogoutAfterCartChoice(false);
+      logout();
+      return;
+    }
+    showToast('Current sale discarded.', 'INFO');
   };
 
   const handleSaveSettings = (rate: number, tracking: boolean) => {
@@ -375,9 +512,9 @@ export default function POSPage() {
     localStorage.setItem('pos_tax_rate', rate.toString());
     localStorage.setItem('pos_inventory_tracking', tracking.toString());
     setIsSettingsOpen(false);
-    setToastType('SUCCESS');
-    setToastMessage('Configurations saved.');
+    showToast('Configurations saved.', 'SUCCESS');
   };
+
 
   const getQuickCashOptions = (tot: number) => {
     const options = [tot];
@@ -401,9 +538,26 @@ export default function POSPage() {
   const isSplitBalanced = Math.abs(splitRemaining) < 0.01;
 
   return (
-    <div style={{ display: 'flex', flex: 1, height: '100dvh', overflow: 'hidden', backgroundColor: 'var(--bg-base)' }}>
+    <div className="pos-layout" style={{ display: 'flex', flex: 1, height: '100dvh', overflow: 'hidden', backgroundColor: 'var(--bg-base)' }}>
+      <div className="pos-mobile-toggle" role="tablist" aria-label="POS panel">
+        <button
+          type="button"
+          className={activeMobilePanel === 'products' ? 'active' : ''}
+          onClick={() => setActiveMobilePanel('products')}
+        >
+          Products
+        </button>
+        <button
+          type="button"
+          className={activeMobilePanel === 'cart' ? 'active' : ''}
+          onClick={() => setActiveMobilePanel('cart')}
+        >
+          Cart ({items.length})
+        </button>
+      </div>
       {/* LEFT PANEL: Product Browser (60%) */}
       <div 
+        className={`pos-products-panel ${activeMobilePanel === 'products' ? 'is-mobile-active' : ''}`}
         style={{ 
           flex: '0 0 60%', 
           backgroundColor: 'var(--bg-base)', 
@@ -422,14 +576,38 @@ export default function POSPage() {
               size={18} 
               style={{ position: 'absolute', left: '12px', color: 'var(--text-muted)' }} 
             />
-            <input 
+             <input 
               type="text" 
               placeholder="Search items or scan barcode..."
               className="pos-input"
-              style={{ width: '100%', paddingLeft: '38px', height: '40px' }}
+              style={{ width: '100%', paddingLeft: '38px', paddingRight: searchTerm ? '38px' : '12px', height: '40px' }}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '4px',
+                  borderRadius: '50%'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
+                onMouseOut={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+              >
+                <X size={16} />
+              </button>
+            )}
+
             {/* Real-time search dropdown */}
             {searchTerm.trim() !== '' && searchDropdownResults && (
               <div 
@@ -569,6 +747,7 @@ export default function POSPage() {
 
       {/* RIGHT PANEL: Cart (40%) */}
       <div 
+        className={`pos-cart-panel ${activeMobilePanel === 'cart' ? 'is-mobile-active' : ''}`}
         style={{ 
           flex: '0 0 40%', 
           backgroundColor: 'var(--bg-surface)', 
@@ -598,46 +777,6 @@ export default function POSPage() {
         />
       </div>
 
-      {/* TOAST NOTIFICATION */}
-      {toastMessage && (
-        <div 
-          className="pos-card"
-          style={{ 
-            position: 'fixed', 
-            bottom: '24px', 
-            right: '24px', 
-            zIndex: 100, 
-            padding: '12px 16px', 
-            minWidth: '280px', 
-            maxWidth: '380px', 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '10px',
-            borderLeft: `3px solid ${
-              toastType === 'SUCCESS' ? 'var(--success)' : 
-              toastType === 'ERROR' ? 'var(--danger)' : 
-              toastType === 'WARNING' ? 'var(--warning)' : 
-              'var(--primary)'
-            }`,
-            animation: 'toastOpen 200ms ease-out'
-          }}
-        >
-          {toastType === 'SUCCESS' && <CheckCircle size={18} style={{ color: 'var(--success)', flexShrink: 0 }} />}
-          {toastType === 'ERROR' && <AlertTriangle size={18} style={{ color: 'var(--danger)', flexShrink: 0 }} />}
-          {toastType === 'WARNING' && <AlertTriangle size={18} style={{ color: 'var(--warning)', flexShrink: 0 }} />}
-          {toastType === 'INFO' && <AlertTriangle size={18} style={{ color: 'var(--primary)', flexShrink: 0 }} />}
-          
-          <span style={{ fontSize: '14px', color: 'var(--text-primary)', fontWeight: 500, flex: 1 }}>{toastMessage}</span>
-          
-          <button 
-            onClick={() => setToastMessage(null)}
-            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
-
       {/* SETTINGS MODAL */}
       {isSettingsOpen && (
         <SettingsModal 
@@ -651,6 +790,7 @@ export default function POSPage() {
       {/* VARIABLE PRODUCT SELECTOR MODAL */}
       {selectedVarProduct && (
         <div 
+          ref={varProductTrapRef}
           style={{ 
             position: 'fixed', 
             inset: 0, 
@@ -677,7 +817,10 @@ export default function POSPage() {
             <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>Adjust Variable Product</span>
               <button 
-                onClick={() => setSelectedVarProduct(null)}
+                onClick={() => {
+                  setSelectedVarProduct(null);
+                  setVariableProductError('');
+                }}
                 className="pos-btn-icon"
                 style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
@@ -700,11 +843,14 @@ export default function POSPage() {
                 <input 
                   type="number"
                   step={selectedVarProduct.unit === 'KG' || selectedVarProduct.unit === 'LITER' ? '0.001' : '1'}
-                  min="0.001"
+                  min="1"
                   className="pos-input"
                   style={{ fontSize: '18px', fontWeight: 600, height: '44px' }}
                   value={overrideQty}
-                  onChange={(e) => setOverrideQty(e.target.value)}
+                  onChange={(e) => {
+                    setOverrideQty(e.target.value);
+                    setVariableProductError('');
+                  }}
                 />
               </div>
 
@@ -721,8 +867,16 @@ export default function POSPage() {
                     className="pos-input"
                     style={{ fontSize: '18px', fontWeight: 600, height: '44px' }}
                     value={overridePrice}
-                    onChange={(e) => setOverridePrice(e.target.value)}
+                    onChange={(e) => {
+                      setOverridePrice(e.target.value);
+                      setVariableProductError('');
+                    }}
                   />
+                </div>
+              )}
+              {variableProductError && (
+                <div style={{ color: 'var(--danger)', fontSize: '13px', fontWeight: 600 }}>
+                  {variableProductError}
                 </div>
               )}
             </div>
@@ -730,7 +884,10 @@ export default function POSPage() {
             {/* Modal Footer */}
             <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: '12px', backgroundColor: 'var(--bg-surface)' }}>
               <button 
-                onClick={() => setSelectedVarProduct(null)}
+                onClick={() => {
+                  setSelectedVarProduct(null);
+                  setVariableProductError('');
+                }}
                 className="pos-btn pos-btn-ghost"
                 style={{ flex: 1, height: '44px' }}
               >
@@ -738,10 +895,23 @@ export default function POSPage() {
               </button>
               <button 
                 onClick={() => {
-                  const qty = Number(overrideQty) || 1;
+                  const qty = Number(overrideQty);
                   const price = overridePrice !== '' ? Number(overridePrice) : selectedVarProduct.base_price;
+
+                  if (Number.isNaN(qty) || qty < 1) {
+                    setVariableProductError('Quantity must be at least 1.');
+                    return;
+                  }
+
+                  if (Number.isNaN(price) || price < 0) {
+                    setVariableProductError('Price cannot be negative.');
+                    return;
+                  }
+
                   addItem(selectedVarProduct, qty, price);
                   setSelectedVarProduct(null);
+                  setVariableProductError('');
+                  setActiveMobilePanel('cart');
                 }}
                 className="pos-btn pos-btn-primary"
                 style={{ flex: 2, height: '44px' }}
@@ -756,6 +926,7 @@ export default function POSPage() {
       {/* NEW SALE CONFIRMATION DIALOG (BUG 2) */}
       {showNewOrderPrompt && (
         <div 
+          ref={newOrderTrapRef}
           style={{ 
             position: 'fixed', 
             inset: 0, 
@@ -795,7 +966,9 @@ export default function POSPage() {
               <AlertTriangle size={24} style={{ color: 'var(--danger)' }} />
             </div>
 
-            <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>Start New Sale?</span>
+            <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>
+              {pendingLogoutAfterCartChoice ? 'Logout?' : 'Start New Sale?'}
+            </span>
             <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
               You have {items.length} item{items.length === 1 ? '' : 's'} in the current order. What would you like to do?
             </p>
@@ -818,7 +991,10 @@ export default function POSPage() {
                 Discard & New Sale
               </button>
               <button 
-                onClick={() => setShowNewOrderPrompt(false)}
+                onClick={() => {
+                  setShowNewOrderPrompt(false);
+                  setPendingLogoutAfterCartChoice(false);
+                }}
                 className="pos-btn pos-btn-ghost"
                 style={{ width: '100%', height: '42px' }}
               >
@@ -829,9 +1005,53 @@ export default function POSPage() {
         </div>
       )}
 
+      {needsManagerPinForCheckout && (
+        <PinModal
+          role="MANAGER"
+          onConfirm={() => {
+            setNeedsManagerPinForCheckout(false);
+            openCheckoutModal();
+          }}
+          onClose={() => setNeedsManagerPinForCheckout(false)}
+        />
+      )}
+
+      {needsManagerPinForStock && overrideStockProduct && (
+        <PinModal
+          role="MANAGER"
+          onConfirm={() => {
+            setNeedsManagerPinForStock(false);
+            const prod = overrideStockProduct;
+            setOverrideStockProduct(null);
+            addProductToCart(prod);
+            showToast(`Manager override: added ${prod.name}`, 'SUCCESS');
+          }}
+          onClose={() => {
+            setNeedsManagerPinForStock(false);
+            setOverrideStockProduct(null);
+            showToast('Out of stock. Addition cancelled.', 'WARNING');
+          }}
+        />
+      )}
+
+      {heldOrderToDelete && (
+        <ConfirmModal
+          title="Delete Held Order"
+          message={`Delete held order ${heldOrderToDelete.local_id}? This cannot be undone.`}
+          confirmLabel="Delete"
+          onConfirm={async () => {
+            await db.orders.delete(heldOrderToDelete.id);
+            setHeldOrderToDelete(null);
+            showToast('Held order deleted.', 'INFO');
+          }}
+          onCancel={() => setHeldOrderToDelete(null)}
+        />
+      )}
+
       {/* RECALL DRAWER (PAGE 9) */}
       {isRecallOpen && (
         <div 
+          ref={recallTrapRef}
           style={{ 
             position: 'fixed', 
             inset: 0, 
@@ -940,6 +1160,7 @@ export default function POSPage() {
       {/* CHECKOUT MODAL (PAGE 6) */}
       {isCheckoutOpen && (
         <div 
+          ref={checkoutTrapRef}
           style={{ 
             position: 'fixed', 
             inset: 0, 
@@ -952,7 +1173,7 @@ export default function POSPage() {
           }}
         >
           <div 
-            className="pos-card animate-in scale-in duration-200"
+            className="pos-card checkout-modal animate-in scale-in duration-200"
             style={{ 
               width: '480px', 
               maxWidth: '95vw', 
@@ -1086,8 +1307,8 @@ export default function POSPage() {
                   </div>
 
                   {/* Quick amount buttons */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                    {getQuickCashOptions(finalTotal).map((opt) => (
+                  <div className="checkout-quick-amounts" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {getQuickCashOptions(grandTotal).map((opt) => (
                       <button
                         key={opt}
                         type="button"
@@ -1098,11 +1319,11 @@ export default function POSPage() {
                           padding: '0 12px', 
                           fontSize: '13px', 
                           fontWeight: 500,
-                          borderColor: Math.abs(opt - finalTotal) < 0.01 ? 'var(--primary)' : 'var(--border)',
-                          color: Math.abs(opt - finalTotal) < 0.01 ? 'var(--primary)' : 'var(--text-primary)'
+                          borderColor: Math.abs(opt - grandTotal) < 0.01 ? 'var(--primary)' : 'var(--border)',
+                          color: Math.abs(opt - grandTotal) < 0.01 ? 'var(--primary)' : 'var(--text-primary)'
                         }}
                       >
-                        {Math.abs(opt - finalTotal) < 0.01 ? `${formatPrice(opt)} Exact` : formatPrice(opt)}
+                        {Math.abs(opt - grandTotal) < 0.01 ? `${formatPrice(opt)} Exact` : formatPrice(opt)}
                       </button>
                     ))}
                   </div>
@@ -1199,7 +1420,7 @@ export default function POSPage() {
               </button>
               <button 
                 onClick={handleProcessCheckout}
-                disabled={isProcessing || (paymentMethod === 'CASH' && Number(amountTendered) < finalTotal) || (paymentMethod === 'SPLIT' && !isSplitBalanced)}
+                disabled={isProcessing || (paymentMethod === 'CASH' && (Number(amountTendered) || 0) < grandTotal) || (paymentMethod === 'SPLIT' && !isSplitBalanced)}
                 className="pos-btn pos-btn-primary"
                 style={{ flex: 2, height: '44px' }}
               >
@@ -1215,6 +1436,7 @@ export default function POSPage() {
         <ReceiptModal 
           order={completedOrder} 
           taxRate={taxRate}
+          changeDue={completedOrder.payment_type === 'CASH' ? changeDue : 0}
           cashierName={completedOrder.cashier || 'STAFF'}
           onClose={() => {
             setCompletedOrder(null);
@@ -1326,11 +1548,12 @@ function SettingsModal({ currentTaxRate, currentTracking, onSave, onClose }: Set
 interface ReceiptModalProps {
   order: Order;
   taxRate: number;
+  changeDue: number;
   cashierName: string;
   onClose: () => void;
 }
 
-function ReceiptModal({ order, taxRate, cashierName, onClose }: ReceiptModalProps) {
+function ReceiptModal({ order, taxRate, changeDue, cashierName, onClose }: ReceiptModalProps) {
   const [products, setProducts] = useState<Record<string, Product>>({});
 
   useEffect(() => {
@@ -1494,7 +1717,7 @@ function ReceiptModal({ order, taxRate, cashierName, onClose }: ReceiptModalProp
             {order.payment_type === 'CASH' && (
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#555' }}>
                 <span>Change:</span>
-                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatPrice(Math.max(0, order.total - subtotalVal))}</span>
+                <span style={{ fontVariantNumeric: 'tabular-nums' }}>{formatPrice(Math.max(0, changeDue))}</span>
               </div>
             )}
           </div>
@@ -1521,21 +1744,7 @@ function ReceiptModal({ order, taxRate, cashierName, onClose }: ReceiptModalProp
         {/* Modal Footer */}
         <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: '12px', backgroundColor: 'var(--bg-surface)', position: 'sticky', bottom: 0 }}>
           <button 
-            onClick={() => {
-              const printContent = document.getElementById('printable-receipt')?.innerHTML;
-              if (printContent) {
-                const printWindow = window.open('', '', 'height=600,width=450');
-                if (printWindow) {
-                  printWindow.document.write('<html><head><title>Print Receipt</title>');
-                  printWindow.document.write('<style>body { font-family: monospace; padding: 20px; }</style>');
-                  printWindow.document.write('</head><body>');
-                  printWindow.document.write(printContent);
-                  printWindow.document.write('</body></html>');
-                  printWindow.document.close();
-                  printWindow.print();
-                }
-              }
-            }}
+            onClick={() => window.print()}
             style={{ backgroundColor: '#1a1a1a', color: 'white', border: 'none', cursor: 'pointer', flex: 1, height: '44px', borderRadius: 'var(--radius-md)', fontWeight: 600, fontSize: '14px' }}
           >
             🖨 Print Receipt

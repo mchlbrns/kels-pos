@@ -69,6 +69,73 @@
   gap: 16px;
 }
 
+.desktopUserControls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.mobileUserMenu {
+  display: none;
+  position: relative;
+}
+
+.mobileUserButton {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+}
+
+.mobileUserDropdown {
+  position: absolute;
+  right: 0;
+  top: 50px;
+  min-width: 160px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+  padding: 6px;
+  z-index: 120;
+}
+
+.mobileUserDropdown button {
+  width: 100%;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.mobileUserDropdown button:hover {
+  background: var(--bg-elevated);
+}
+
+.mobileRole {
+  padding: 8px 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
 .userBadge {
   display: inline-flex;
   align-items: center;
@@ -138,4 +205,75 @@
 
 .login button:hover {
   background: var(--bg-accent);
+}
+
+@media (max-width: 767px) {
+  .header {
+    height: auto;
+    min-height: 56px;
+    padding: 6px 10px;
+    gap: 8px;
+  }
+
+  .left {
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .title {
+    font-size: 0;
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .logoIcon {
+    font-size: 18px;
+  }
+
+  .nav {
+    gap: 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .navLink {
+    min-height: 44px;
+    padding: 0 9px;
+    font-size: 13px;
+    white-space: nowrap;
+    align-items: center;
+  }
+
+  .right {
+    gap: 8px;
+  }
+
+  .desktopUserControls {
+    display: none;
+  }
+
+  .mobileUserMenu {
+    display: block;
+  }
+
+  .settingsBtn,
+  .logoutBtn,
+  .login button {
+    min-height: 44px;
+  }
+
+  .login {
+    gap: 6px;
+  }
+
+  .login button {
+    padding: 0 10px;
+    font-size: 12px;
+  }
 }

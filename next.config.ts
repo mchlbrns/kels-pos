@@ -1,4 +1,3 @@
-import type { NextConfig } from "next";
 import withPWAInit from "next-pwa";
 
 const withPWA = withPWAInit({
@@ -8,8 +7,12 @@ const withPWA = withPWAInit({
   skipWaiting: true,
 });
 
-const nextConfig = withPWA({
-  /* config options here */
-});
+const nextConfig = {
+  env: {
+    VITE_STAFF_PIN: process.env.VITE_STAFF_PIN ?? '',
+    VITE_MANAGER_PIN: process.env.VITE_MANAGER_PIN ?? '',
+    VITE_DEV_MODE: process.env.VITE_DEV_MODE ?? '',
+  },
+};
 
-export default nextConfig;
+export default withPWA(nextConfig);

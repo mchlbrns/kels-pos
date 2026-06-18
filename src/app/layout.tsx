@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
+import { ToastProvider } from "@/context/ToastContext";
+import RouteGuard from "@/components/RouteGuard/RouteGuard";
 import Header from "@/components/Header/Header";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -27,12 +29,17 @@ export default function RootLayout({
     <html lang="en" className={inter.className}>
       <body>
         <AuthProvider>
-          <Header />
-          <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            {children}
-          </main>
+          <ToastProvider>
+            <RouteGuard>
+              <Header />
+              <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                {children}
+              </main>
+            </RouteGuard>
+          </ToastProvider>
         </AuthProvider>
       </body>
     </html>
   );
 }
+

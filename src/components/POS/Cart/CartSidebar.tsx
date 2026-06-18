@@ -170,7 +170,11 @@ export default function CartSidebar({
                   </div>
 
                   <button 
-                    onClick={() => onRemove(item.product_id)}
+                    onClick={() => {
+                      if (confirm(`Remove ${item.product.name} from order?`)) {
+                        onRemove(item.product_id);
+                      }
+                    }}
                     style={{ 
                       background: 'none',
                       border: 'none',
@@ -281,11 +285,24 @@ export default function CartSidebar({
               value={discount || ''}
               onChange={(e) => onUpdateDiscount(Math.max(0, Number(e.target.value)))}
               className="pos-input"
-              style={{ width: '90px', height: '28px', textAlign: 'right', padding: '0 8px', fontSize: '12px' }}
+              style={{ 
+                width: '90px', 
+                height: '28px', 
+                textAlign: 'right', 
+                padding: '0 8px', 
+                fontSize: '12px',
+                borderColor: ((discountType === 'percentage' && discount > 100) || (discountType === 'flat' && discount > subtotal)) ? 'var(--danger)' : 'var(--border)'
+              }}
               placeholder="0"
             />
           </div>
         </div>
+
+        {((discountType === 'percentage' && discount > 100) || (discountType === 'flat' && discount > subtotal)) && (
+          <div style={{ color: 'var(--danger)', fontSize: '12px', fontWeight: 600, textAlign: 'right', marginTop: '-4px' }}>
+            Discount cannot exceed the order total.
+          </div>
+        )}
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Tax {taxRate}%</span>
@@ -340,9 +357,18 @@ export default function CartSidebar({
         </button>
         <button 
           onClick={onCheckout}
-          disabled={items.length === 0 || isLoading}
+          disabled={isLoading || ((discountType === 'percentage' && discount > 100) || (discountType === 'flat' && discount > subtotal))}
           className="pos-btn pos-btn-primary"
-          style={{ flex: 2, height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+          style={{ 
+            flex: 2, 
+            height: '44px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            gap: '8px',
+            opacity: (isLoading || ((discountType === 'percentage' && discount > 100) || (discountType === 'flat' && discount > subtotal))) ? 0.5 : 1,
+            cursor: (isLoading || ((discountType === 'percentage' && discount > 100) || (discountType === 'flat' && discount > subtotal))) ? 'not-allowed' : 'pointer'
+          }}
         >
           <CreditCard size={18} />
           Checkout

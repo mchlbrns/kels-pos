@@ -16,15 +16,19 @@ const formatPrice = (amount: number) => {
 };
 
 export default function CatalogGrid({ searchTerm, onSelectItem, inventoryTrackingEnabled = true }: CatalogGridProps) {
+  const viteEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+  const isDevMode = viteEnv?.VITE_DEV_MODE === 'true' || process.env.VITE_DEV_MODE === 'true';
+
   const products = useLiveQuery(
     async () => {
-      if (!searchTerm) return await db.products.toArray();
-      return await db.products
-        .where('name')
-        .startsWithIgnoreCase(searchTerm)
-        .or('sku_barcode')
-        .equals(searchTerm)
-        .toArray();
+      const allProducts = await db.products.toArray();
+      if (!searchTerm) return allProducts;
+      const query = searchTerm.toLowerCase();
+      return allProducts.filter(p => {
+        const nameMatch = p.name.toLowerCase().includes(query);
+        const skuMatch = p.sku_barcode ? p.sku_barcode.toLowerCase().includes(query) : false;
+        return nameMatch || skuMatch;
+      });
     },
     [searchTerm]
   );
@@ -49,13 +53,15 @@ export default function CatalogGrid({ searchTerm, onSelectItem, inventoryTrackin
         <Package size={56} style={{ color: 'var(--text-muted)', opacity: 0.2 }} />
         <span style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-muted)' }}>No products found in catalog.</span>
         <span style={{ fontSize: '13px', color: 'var(--text-muted)', opacity: 0.7 }}>Add items to catalog or seed mock data to get started.</span>
-        <button 
-          onClick={() => seedMockData()}
-          className="pos-btn pos-btn-ghost"
-          style={{ marginTop: '8px' }}
-        >
-          Seed Mock Data
-        </button>
+        {isDevMode && (
+          <button 
+            onClick={() => seedMockData()}
+            className="pos-btn pos-btn-ghost"
+            style={{ marginTop: '8px' }}
+          >
+            Seed Mock Data
+          </button>
+        )}
       </div>
     );
   }
@@ -75,25 +81,22 @@ export default function CatalogGrid({ searchTerm, onSelectItem, inventoryTrackin
         return (
           <div 
             key={product.id}
-            onClick={() => {
-              if (!isOutOfStock) onSelectItem(product);
-            }}
+            onClick={() => onSelectItem(product)}
             className="pos-card"
             style={{ 
               padding: '14px', 
-              cursor: isOutOfStock ? 'not-allowed' : 'pointer', 
+              cursor: 'pointer', 
               display: 'flex', 
               flexDirection: 'column', 
               gap: '8px',
-              opacity: isOutOfStock ? 0.5 : 1,
-              position: 'relative'
+              opacity: isOutOfStock ? 0.6 : 1,
+              position: 'relative',
+              overflow: 'hidden'
             }}
             onMouseOver={(e) => {
-              if (!isOutOfStock) {
-                e.currentTarget.style.borderColor = 'var(--primary)';
-                e.currentTarget.style.boxShadow = '0 0 0 1px var(--primary), var(--shadow)';
-                e.currentTarget.style.transform = 'translateY(-1px)';
-              }
+              e.currentTarget.style.borderColor = 'var(--primary)';
+              e.currentTarget.style.boxShadow = '0 0 0 1px var(--primary), var(--shadow)';
+              e.currentTarget.style.transform = 'translateY(-1px)';
             }}
             onMouseOut={(e) => {
               e.currentTarget.style.borderColor = 'var(--border)';
@@ -101,18 +104,46 @@ export default function CatalogGrid({ searchTerm, onSelectItem, inventoryTrackin
               e.currentTarget.style.transform = 'translateY(0)';
             }}
             onMouseDown={(e) => {
-              if (!isOutOfStock) {
-                e.currentTarget.style.transform = 'scale(0.97)';
-              }
+              e.currentTarget.style.transform = 'scale(0.97)';
             }}
             onMouseUp={(e) => {
-              if (!isOutOfStock) {
-                e.currentTarget.style.transform = 'translateY(-1px)';
-              }
+              e.currentTarget.style.transform = 'translateY(-1px)';
             }}
           >
+            {/* Out of Stock Overlay */}
+            {isOutOfStock && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                  borderRadius: 'var(--radius-md)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 10,
+                  backdropFilter: 'blur(1px)'
+                }}
+              >
+                <span
+                  style={{
+                    backgroundColor: 'var(--danger)',
+                    color: 'white',
+                    padding: '6px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    fontWeight: 700,
+                    fontSize: '11px',
+                    letterSpacing: '0.05em',
+                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)'
+                  }}
+                >
+                  OUT OF STOCK
+                </span>
+              </div>
+            )}
+
             {/* Top row with badges */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 1 }}>
               <span 
                 className="pos-badge"
                 style={{ 
@@ -138,9 +169,9 @@ export default function CatalogGrid({ searchTerm, onSelectItem, inventoryTrackin
                 <span 
                   className="pos-badge"
                   style={{ 
-                    backgroundColor: isLowStock ? 'rgba(239, 68, 68, 0.15)' : 'rgba(71, 85, 105, 0.15)',
-                    color: isLowStock ? '#ef4444' : 'var(--text-secondary)',
-                    borderColor: isLowStock ? 'rgba(239, 68, 68, 0.3)' : 'rgba(71, 85, 105, 0.3)'
+                    backgroundColor: isOutOfStock ? 'rgba(239, 68, 68, 0.15)' : isLowStock ? 'rgba(239, 68, 68, 0.15)' : 'rgba(71, 85, 105, 0.15)',
+                    color: isOutOfStock ? '#ef4444' : isLowStock ? '#ef4444' : 'var(--text-secondary)',
+                    borderColor: isOutOfStock ? 'rgba(239, 68, 68, 0.3)' : isLowStock ? 'rgba(239, 68, 68, 0.3)' : 'rgba(71, 85, 105, 0.3)'
                   }}
                 >
                   Stock: {product.stock}
@@ -160,14 +191,15 @@ export default function CatalogGrid({ searchTerm, onSelectItem, inventoryTrackin
                 textOverflow: 'ellipsis',
                 display: '-webkit-box',
                 WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical'
+                WebkitBoxOrient: 'vertical',
+                zIndex: 1
               }}
             >
               {product.name}
             </h3>
 
             {/* Bottom Row */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto', zIndex: 1 }}>
               <span style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500 }}>
                 {product.unit}
               </span>

@@ -239,10 +239,248 @@ button, input, select, textarea, a, .card, .tab-item {
   box-shadow: var(--shadow);
 }
 
+.pos-mobile-toggle,
+.orders-mobile-list {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  button,
+  a,
+  .pos-btn,
+  .pos-btn-icon,
+  .pos-input,
+  .pos-select {
+    min-height: 44px;
+  }
+
+  .pos-btn-icon {
+    min-width: 44px;
+  }
+
+  .pos-layout {
+    flex-direction: column !important;
+    height: auto !important;
+    min-height: calc(100dvh - 56px);
+    overflow: visible !important;
+  }
+
+  .pos-mobile-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 10px 12px 0;
+    background: var(--bg-base);
+    position: sticky;
+    top: 56px;
+    z-index: 30;
+  }
+
+  .pos-mobile-toggle button {
+    min-height: 44px;
+    border: 1px solid var(--border);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    border-radius: var(--radius-md);
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .pos-mobile-toggle button.active {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: white;
+  }
+
+  .pos-products-panel,
+  .pos-cart-panel {
+    display: none !important;
+    flex: none !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: calc(100dvh - 110px);
+    border-left: none !important;
+  }
+
+  .pos-products-panel.is-mobile-active,
+  .pos-cart-panel.is-mobile-active {
+    display: flex !important;
+  }
+
+  .pos-products-panel {
+    padding: 12px !important;
+    overflow: visible !important;
+  }
+
+  .pos-cart-panel {
+    overflow: visible !important;
+  }
+
+  .cart-discount-row {
+    align-items: stretch !important;
+    flex-direction: column !important;
+    gap: 8px;
+  }
+
+  .cart-discount-controls {
+    align-items: stretch !important;
+    flex-direction: column !important;
+    width: 100%;
+  }
+
+  .cart-discount-controls > div,
+  .cart-discount-controls input {
+    width: 100% !important;
+    height: 44px !important;
+  }
+
+  .cart-discount-controls > div > button {
+    flex: 1;
+    min-height: 44px;
+  }
+
+  .checkout-modal {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto !important;
+  }
+
+  .checkout-quick-amounts {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px !important;
+  }
+
+  .checkout-quick-amounts .pos-btn {
+    min-height: 44px;
+    width: 100%;
+    padding: 0 6px !important;
+    white-space: normal;
+  }
+
+  .orders-page {
+    padding: 16px 12px !important;
+    max-width: 100% !important;
+  }
+
+  .orders-filters {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .orders-filters .pos-select {
+    width: 100% !important;
+  }
+
+  .orders-table-card {
+    display: none;
+  }
+
+  .orders-mobile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .orders-mobile-empty {
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--text-muted);
+    font-weight: 700;
+  }
+
+  .orders-mobile-card {
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow: hidden;
+  }
+
+  .orders-mobile-card-top,
+  .orders-mobile-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .orders-mobile-id {
+    min-height: 44px;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    color: var(--primary);
+    font-family: monospace;
+    font-weight: 700;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+  }
+
+  .orders-mobile-total {
+    color: white;
+    font-size: 22px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .orders-mobile-meta {
+    display: grid;
+    gap: 4px;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+
+  .orders-mobile-actions .pos-btn {
+    flex: 1;
+    min-height: 44px;
+    padding: 0 10px;
+  }
+}
+
 /* Print Utilities */
 @media print {
-  header, nav, button, .no-print {
-    display: none !important;
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  body * {
+    visibility: hidden !important;
+  }
+  #printable-receipt, #printable-receipt * {
+    visibility: visible !important;
+  }
+  #printable-receipt {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
+    margin: 0 !important;
+    padding: 10px !important;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+}
+
+@keyframes toastOpen {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 

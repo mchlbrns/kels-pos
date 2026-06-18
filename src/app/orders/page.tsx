@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Order, type Customer, type Product } from '@/lib/db';
 import { addToSyncQueue } from '@/lib/sync';
+import ConfirmModal from '@/components/ConfirmModal/ConfirmModal';
+import { useAuth } from '@/context/AuthContext';
 import { 
   Search, 
   RotateCcw, 
@@ -19,8 +21,13 @@ const formatPrice = (amount: number) => {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 };
 
+const normalizeOrderStatus = (status: string) => status === 'PAID' ? 'COMPLETED' : status;
+
 export default function OrdersPage() {
+  const { session } = useAuth();
+  const role = session?.role;
   const [searchTerm, setSearchTerm] = useState('');
+
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [dateFilter, setDateFilter] = useState<string>('ALL'); // ALL, TODAY, YESTERDAY, LAST_7_DAYS, LAST_30_DAYS
   
@@ -30,6 +37,7 @@ export default function OrdersPage() {
 
   // Selected Order for detail view modal
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [refundOrder, setRefundOrder] = useState<Order | null>(null);
 
   // Fetch orders and customers
   const orders = useLiveQuery(() => db.orders.toArray());
@@ -47,18 +55,21 @@ export default function OrdersPage() {
   const filteredOrders = React.useMemo(() => {
     const ords = orders || [];
     return ords.filter(order => {
-      // 1. Search term (matches order local_id, customer name, or cashier name)
+      // 1. Search term (matches order local_id, customer name, cashier name, or payment type)
       const customer = order.customer_id ? customerMap[order.customer_id] : null;
       const custName = customer ? customer.name.toLowerCase() : 'guest';
       const orderId = order.local_id.toLowerCase();
       const cashier = (order.cashier || '').toLowerCase();
+      const paymentType = (order.payment_type || '').toLowerCase();
       const term = searchTerm.toLowerCase();
       
-      const matchesSearch = orderId.includes(term) || custName.includes(term) || cashier.includes(term);
+      const matchesSearch = orderId.includes(term) || custName.includes(term) || cashier.includes(term) || paymentType.includes(term);
       if (!matchesSearch) return false;
 
+
       // 2. Status filter
-      if (statusFilter !== 'ALL' && order.status !== statusFilter) return false;
+      const normalizedStatus = normalizeOrderStatus(order.status);
+      if (statusFilter !== 'ALL' && normalizedStatus !== statusFilter) return false;
 
       // 3. Date filter
       if (dateFilter === 'TODAY') {
@@ -103,34 +114,32 @@ export default function OrdersPage() {
   // Refund Handler
   const handleRefund = async (order: Order) => {
     if (order.status === 'REFUNDED') return;
-    if (confirm(`Are you sure you want to refund order ${order.local_id}?`)) {
-      try {
-        const updatedOrder: Order = {
-          ...order,
-          status: 'REFUNDED',
-          sync_status: 'PENDING'
-        };
-        await db.orders.put(updatedOrder);
-        await addToSyncQueue('ORDER', updatedOrder);
-        
-        // Return loyalty points to customer if linked
-        if (order.customer_id) {
-          const customer = await db.customers.get(order.customer_id);
-          if (customer) {
-            const deductedPoints = Math.floor(order.total);
-            const updatedCust = {
-              ...customer,
-              points: Math.max(0, customer.points - deductedPoints)
-            };
-            await db.customers.put(updatedCust);
-            await addToSyncQueue('CUSTOMER', updatedCust);
-          }
+    try {
+      const updatedOrder: Order = {
+        ...order,
+        status: 'REFUNDED',
+        sync_status: 'PENDING'
+      };
+      await db.orders.put(updatedOrder);
+      await addToSyncQueue('ORDER', updatedOrder);
+      
+      // Return loyalty points to customer if linked
+      if (order.customer_id) {
+        const customer = await db.customers.get(order.customer_id);
+        if (customer) {
+          const deductedPoints = Math.floor(order.total);
+          const updatedCust = {
+            ...customer,
+            points: Math.max(0, customer.points - deductedPoints)
+          };
+          await db.customers.put(updatedCust);
+          await addToSyncQueue('CUSTOMER', updatedCust);
         }
-        
-        alert('Order marked as REFUNDED.');
-      } catch (error) {
-        console.error('Refund failed:', error);
       }
+      
+      alert('Order marked as REFUNDED.');
+    } catch (error) {
+      console.error('Refund failed:', error);
     }
   };
 
@@ -169,7 +178,7 @@ export default function OrdersPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', padding: '24px 32px', maxWidth: '1200px', width: '100%', margin: '0 auto' }}>
+    <div className="orders-page" style={{ minHeight: '100vh', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', padding: '24px 32px', maxWidth: '1200px', width: '100%', margin: '0 auto' }}>
       
       {/* PAGE HEADER */}
       <div style={{ marginBottom: '24px' }}>
@@ -199,7 +208,7 @@ export default function OrdersPage() {
           </div>
           
           {/* Dropdown Filters */}
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div className="orders-filters" style={{ display: 'flex', gap: '8px' }}>
             <select
               className="pos-select"
               style={{ width: '160px' }}
@@ -278,7 +287,7 @@ export default function OrdersPage() {
 
       {/* ORDERS TABLE CONTAINER */}
       <div 
-        className="pos-card" 
+        className="pos-card orders-table-card" 
         style={{ overflow: 'hidden', borderRadius: 'var(--radius-lg)' }}
       >
         <div style={{ overflowX: 'auto' }}>
@@ -385,33 +394,34 @@ export default function OrdersPage() {
                           className="pos-badge"
                           style={{
                             backgroundColor: 
-                              order.status === 'COMPLETED' ? 'rgba(34, 197, 94, 0.12)' :
+                              normalizeOrderStatus(order.status) === 'COMPLETED' ? 'rgba(34, 197, 94, 0.12)' :
                               order.status === 'HELD' ? 'rgba(245, 158, 11, 0.12)' :
                               order.status === 'VOIDED' || order.status === 'REFUNDED' ? 'rgba(239, 68, 68, 0.12)' :
                               'rgba(59, 130, 246, 0.12)',
                             color: 
-                              order.status === 'COMPLETED' ? '#22c55e' :
+                              normalizeOrderStatus(order.status) === 'COMPLETED' ? '#22c55e' :
                               order.status === 'HELD' ? '#f59e0b' :
                               order.status === 'VOIDED' || order.status === 'REFUNDED' ? '#ef4444' :
                               '#3b82f6',
                             borderColor: 
-                              order.status === 'COMPLETED' ? 'rgba(34, 197, 94, 0.3)' :
+                              normalizeOrderStatus(order.status) === 'COMPLETED' ? 'rgba(34, 197, 94, 0.3)' :
                               order.status === 'HELD' ? 'rgba(245, 158, 11, 0.3)' :
                               order.status === 'VOIDED' || order.status === 'REFUNDED' ? 'rgba(239, 68, 68, 0.3)' :
                               'rgba(59, 130, 246, 0.3)'
                           }}
                         >
-                          {order.status}
+                          {normalizeOrderStatus(order.status)}
                         </span>
                       </td>
 
                       {/* Actions */}
                       <td style={{ padding: '14px 20px', verticalAlign: 'middle' }}>
-                        {order.status === 'COMPLETED' ? (
+                        {normalizeOrderStatus(order.status) === 'COMPLETED' ? (
                           <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'center' }}>
                             <button
-                              onClick={() => handleRefund(order)}
-                              title="Refund"
+                              onClick={() => role === 'MANAGER' && setRefundOrder(order)}
+                              disabled={role !== 'MANAGER'}
+                              title={role === 'MANAGER' ? "Refund" : "Manager access required."}
                               style={{ 
                                 width: '32px', 
                                 height: '32px', 
@@ -422,17 +432,23 @@ export default function OrdersPage() {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                cursor: 'pointer',
+                                cursor: role === 'MANAGER' ? 'pointer' : 'not-allowed',
+                                opacity: role === 'MANAGER' ? 1 : 0.4,
                                 transition: 'background-color 150ms'
                               }}
-                              onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(245, 158, 11, 0.1)'}
-                              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                              onMouseOver={(e) => {
+                                if (role === 'MANAGER') e.currentTarget.style.backgroundColor = 'rgba(245, 158, 11, 0.1)';
+                              }}
+                              onMouseOut={(e) => {
+                                if (role === 'MANAGER') e.currentTarget.style.backgroundColor = 'transparent';
+                              }}
                             >
                               <RotateCcw size={14} />
                             </button>
                             <button
-                              onClick={() => handleVoid(order)}
-                              title="Void"
+                              onClick={() => role === 'MANAGER' && handleVoid(order)}
+                              disabled={role !== 'MANAGER'}
+                              title={role === 'MANAGER' ? "Void" : "Manager access required."}
                               style={{ 
                                 width: '32px', 
                                 height: '32px', 
@@ -443,11 +459,16 @@ export default function OrdersPage() {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                cursor: 'pointer',
+                                cursor: role === 'MANAGER' ? 'pointer' : 'not-allowed',
+                                opacity: role === 'MANAGER' ? 1 : 0.4,
                                 transition: 'background-color 150ms'
                               }}
-                              onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)'}
-                              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                              onMouseOver={(e) => {
+                                if (role === 'MANAGER') e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                              }}
+                              onMouseOut={(e) => {
+                                if (role === 'MANAGER') e.currentTarget.style.backgroundColor = 'transparent';
+                              }}
                             >
                               <Trash2 size={14} />
                             </button>
@@ -467,11 +488,113 @@ export default function OrdersPage() {
         </div>
       </div>
 
+      <div className="orders-mobile-list">
+        {filteredOrders.length === 0 ? (
+          <div className="pos-card orders-mobile-empty">
+            <ShoppingBag size={44} style={{ opacity: 0.2, color: 'var(--text-muted)' }} />
+            <span>No orders found</span>
+          </div>
+        ) : (
+          filteredOrders.map((order) => {
+            const customer = order.customer_id ? customerMap[order.customer_id] : null;
+            const normalizedStatus = normalizeOrderStatus(order.status);
+
+            return (
+              <article key={order.id} className="pos-card orders-mobile-card">
+                <div className="orders-mobile-card-top">
+                  <button
+                    onClick={() => setSelectedOrder(order)}
+                    className="orders-mobile-id"
+                  >
+                    {order.local_id}
+                  </button>
+                  <span
+                    className="pos-badge"
+                    style={{
+                      backgroundColor:
+                        normalizedStatus === 'COMPLETED' ? 'rgba(34, 197, 94, 0.12)' :
+                        order.status === 'HELD' ? 'rgba(245, 158, 11, 0.12)' :
+                        order.status === 'VOIDED' || order.status === 'REFUNDED' ? 'rgba(239, 68, 68, 0.12)' :
+                        'rgba(59, 130, 246, 0.12)',
+                      color:
+                        normalizedStatus === 'COMPLETED' ? '#22c55e' :
+                        order.status === 'HELD' ? '#f59e0b' :
+                        order.status === 'VOIDED' || order.status === 'REFUNDED' ? '#ef4444' :
+                        '#3b82f6',
+                      borderColor:
+                        normalizedStatus === 'COMPLETED' ? 'rgba(34, 197, 94, 0.3)' :
+                        order.status === 'HELD' ? 'rgba(245, 158, 11, 0.3)' :
+                        order.status === 'VOIDED' || order.status === 'REFUNDED' ? 'rgba(239, 68, 68, 0.3)' :
+                        'rgba(59, 130, 246, 0.3)'
+                    }}
+                  >
+                    {normalizedStatus}
+                  </span>
+                </div>
+
+                <div className="orders-mobile-total">{formatPrice(order.total)}</div>
+
+                <div className="orders-mobile-meta">
+                  <span>{new Date(order.created_at).toLocaleDateString()} at {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span>{customer ? customer.name : 'Guest'}</span>
+                  <span>{order.payment_type}</span>
+                </div>
+
+                {normalizedStatus === 'COMPLETED' ? (
+                  <div className="orders-mobile-actions">
+                    <button
+                      onClick={() => role === 'MANAGER' && setRefundOrder(order)}
+                      disabled={role !== 'MANAGER'}
+                      className="pos-btn pos-btn-warning"
+                      title={role === 'MANAGER' ? "Refund" : "Manager access required."}
+                      style={{
+                        cursor: role === 'MANAGER' ? 'pointer' : 'not-allowed',
+                        opacity: role === 'MANAGER' ? 1 : 0.4
+                      }}
+                    >
+                      <RotateCcw size={16} />
+                      Refund
+                    </button>
+                    <button
+                      onClick={() => role === 'MANAGER' && handleVoid(order)}
+                      disabled={role !== 'MANAGER'}
+                      className="pos-btn pos-btn-danger"
+                      title={role === 'MANAGER' ? "Void" : "Manager access required."}
+                      style={{
+                        cursor: role === 'MANAGER' ? 'pointer' : 'not-allowed',
+                        opacity: role === 'MANAGER' ? 1 : 0.4
+                      }}
+                    >
+                      <Trash2 size={16} />
+                      Void
+                    </button>
+                  </div>
+                ) : null}
+
+              </article>
+            );
+          })
+        )}
+      </div>
+
       {selectedOrder && (
         <OrderDetailModal 
           order={selectedOrder}
           customerMap={customerMap}
           onClose={() => setSelectedOrder(null)}
+        />
+      )}
+      {refundOrder && (
+        <ConfirmModal
+          title="Confirm Refund"
+          message={`Refund order ${refundOrder.local_id} for ${formatPrice(refundOrder.total)}?`}
+          confirmLabel="Yes, Refund"
+          onConfirm={async () => {
+            const orderToRefund = refundOrder;
+            setRefundOrder(null);
+            await handleRefund(orderToRefund);
+          }}
+          onCancel={() => setRefundOrder(null)}
         />
       )}
     </div>
@@ -502,9 +625,10 @@ function OrderDetailModal({ order, customerMap, onClose }: OrderDetailModalProps
 
   const discountVal = order.discount || 0;
   const taxVal = order.tax || 0;
-  const subtotalVal = order.total - taxVal + discountVal;
+  const subtotalVal = order.items.reduce((sum, item) => sum + item.quantity * item.price_at_sale, 0);
   const customer = order.customer_id ? customerMap[order.customer_id] : null;
-  const taxRate = subtotalVal > 0 ? Math.round((taxVal / subtotalVal) * 100) : 10;
+  const taxableSubtotal = Math.max(0, subtotalVal - discountVal);
+  const taxRate = taxableSubtotal > 0 ? Math.round((taxVal / taxableSubtotal) * 100) : 0;
 
   return (
     <div 
@@ -577,23 +701,23 @@ function OrderDetailModal({ order, customerMap, onClose }: OrderDetailModalProps
                 className="pos-badge"
                 style={{
                   backgroundColor: 
-                    order.status === 'COMPLETED' ? 'rgba(34, 197, 94, 0.15)' :
+                    normalizeOrderStatus(order.status) === 'COMPLETED' ? 'rgba(34, 197, 94, 0.15)' :
                     order.status === 'HELD' ? 'rgba(245, 158, 11, 0.15)' :
                     order.status === 'REFUNDED' || order.status === 'VOIDED' ? 'rgba(239, 68, 68, 0.15)' :
                     'rgba(59, 130, 246, 0.15)',
                   color: 
-                    order.status === 'COMPLETED' ? 'var(--success)' :
+                    normalizeOrderStatus(order.status) === 'COMPLETED' ? 'var(--success)' :
                     order.status === 'HELD' ? 'var(--warning)' :
                     order.status === 'REFUNDED' || order.status === 'VOIDED' ? 'var(--danger)' :
                     'var(--primary)',
                   borderColor: 
-                    order.status === 'COMPLETED' ? 'rgba(34, 197, 94, 0.3)' :
+                    normalizeOrderStatus(order.status) === 'COMPLETED' ? 'rgba(34, 197, 94, 0.3)' :
                     order.status === 'HELD' ? 'rgba(245, 158, 11, 0.3)' :
                     order.status === 'REFUNDED' || order.status === 'VOIDED' ? 'rgba(239, 68, 68, 0.3)' :
                     'rgba(59, 130, 246, 0.3)'
                 }}
               >
-                {order.status}
+                {normalizeOrderStatus(order.status)}
               </span>
             </div>
           </div>
