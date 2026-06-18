@@ -13,11 +13,21 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRole] = useState<Role | null>(null);
+  const [role, setRole] = useState<Role | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('pos_role') as Role;
+    }
+    return null;
+  });
 
   useEffect(() => {
-    const savedRole = localStorage.getItem('pos_role') as Role;
-    if (savedRole) setRole(savedRole);
+    // Sync with localStorage if it changes elsewhere
+    const handleStorage = () => {
+      const savedRole = localStorage.getItem('pos_role') as Role;
+      setRole(savedRole);
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   const login = (newRole: Role) => {

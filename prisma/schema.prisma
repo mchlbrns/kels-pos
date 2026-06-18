@@ -1,0 +1,81 @@
+// This is the cloud schema for Prisma ORM
+// Note: This needs to be synced with the local IndexedDB schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProductType {
+  PRODUCT
+  SERVICE
+}
+
+enum UnitType {
+  KG
+  LITER
+  PIECE
+  HOUR
+  BUNDLE
+}
+
+enum OrderStatus {
+  PENDING
+  HELD
+  COMPLETED
+  REFUNDED
+}
+
+model Product {
+  id             String      @id @default(uuid())
+  name           String
+  type           ProductType @default(PRODUCT)
+  unit           UnitType    @default(PIECE)
+  basePrice      Decimal     @db.Decimal(10, 2)
+  isVariable     Boolean     @default(false)
+  allowOverride  Boolean     @default(true)
+  skuBarcode     String?     @unique
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  orderItems     OrderItem[]
+}
+
+model Customer {
+  id               String   @id @default(uuid())
+  name             String
+  phone            String?  @unique
+  loyaltyId        String?  @unique
+  points           Int      @default(0)
+  totalVisits      Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  orders           Order[]
+}
+
+model Order {
+  id           String      @id @default(uuid())
+  localId      String?     @unique // Reference to the original local ID
+  customerId   String?
+  customer     Customer?   @relation(fields: [customerId], references: [id])
+  total        Decimal     @db.Decimal(10, 2)
+  status       OrderStatus @default(COMPLETED)
+  paymentType  String      @default("CASH")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  items        OrderItem[]
+}
+
+model OrderItem {
+  id          String  @id @default(uuid())
+  orderId     String
+  order       Order   @relation(fields: [orderId], references: [id])
+  productId   String
+  product     Product @relation(fields: [productId], references: [id])
+  quantity    Decimal @db.Decimal(10, 3)
+  priceAtSale Decimal @db.Decimal(10, 2)
+  unit        String
+}

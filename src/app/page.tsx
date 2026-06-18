@@ -1,7 +1,5 @@
-import OrderInterface from "@/components/OrderInterface/OrderInterface";
+import { redirect } from 'next/navigation';
 
 export default function Home() {
-  return (
-    <OrderInterface />
-  );
+  redirect('/pos');
 }

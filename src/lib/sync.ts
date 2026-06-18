@@ -1,6 +1,6 @@
-import { db, type Order, type SyncEntry } from './db';
+import { db, type Order, type SyncEntry, type Customer, type Product } from './db';
 
-export async function addToSyncQueue(entityType: SyncEntry['entity_type'], payload: any) {
+export async function addToSyncQueue(entityType: SyncEntry['entity_type'], payload: Order | Customer | Product) {
   const syncEntry: SyncEntry = {
     id: crypto.randomUUID(),
     entity_type: entityType,
@@ -19,10 +19,14 @@ export async function addToSyncQueue(entityType: SyncEntry['entity_type'], paylo
 }
 
 export async function processSyncQueue() {
+  if (!navigator.onLine) return;
+
   const pendingEntries = await db.syncQueue
     .where('status')
     .equals('PENDING')
     .toArray();
+
+  console.log(`Syncing ${pendingEntries.length} entries...`);
 
   for (const entry of pendingEntries) {
     try {
@@ -37,19 +41,18 @@ export async function processSyncQueue() {
       if (response.ok) {
         await db.syncQueue.update(entry.id, { status: 'SYNCED' });
         
-        // If it was an order, update its sync status in the orders table
         if (entry.entity_type === 'ORDER') {
-            const orderId = entry.payload.id;
-            await db.orders.update(orderId, { sync_status: 'SYNCED' });
+            await db.orders.update(entry.payload.id, { sync_status: 'SYNCED' });
         }
       } else {
+        const nextRetry = entry.retry_count + 1;
         await db.syncQueue.update(entry.id, { 
-          retry_count: entry.retry_count + 1,
-          status: entry.retry_count > 5 ? 'FAILED' : 'PENDING'
+          retry_count: nextRetry,
+          status: nextRetry > 5 ? 'FAILED' : 'PENDING'
         });
       }
     } catch (error) {
-      console.error('Sync failed for entry:', entry.id, error);
+      console.error(`Sync failed for entry ${entry.id}:`, error);
     }
   }
 }

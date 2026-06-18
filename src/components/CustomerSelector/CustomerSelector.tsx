@@ -29,7 +29,9 @@ export default function CustomerSelector({ selectedCustomer, onSelect }: Props) 
       id: crypto.randomUUID(),
       name: newName,
       phone: newPhone,
-      points: 0
+      points: 0,
+      total_visits: 0,
+      loyalty_id: `LOY-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
     };
     await db.customers.add(newCustomer);
     await addToSyncQueue('CUSTOMER', newCustomer);

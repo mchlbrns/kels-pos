@@ -66,7 +66,7 @@ export default function CatalogPage() {
               <label>Type</label>
               <select 
                 value={formData.type} 
-                onChange={e => setFormData({...formData, type: e.target.value as any})}
+                onChange={e => setFormData({...formData, type: e.target.value as 'PRODUCT' | 'SERVICE'})}
               >
                 <option value="PRODUCT">Product</option>
                 <option value="SERVICE">Service</option>
@@ -76,7 +76,7 @@ export default function CatalogPage() {
               <label>Unit</label>
               <select 
                 value={formData.unit} 
-                onChange={e => setFormData({...formData, unit: e.target.value as any})}
+                onChange={e => setFormData({...formData, unit: e.target.value as 'PIECE' | 'KG' | 'LITER' | 'HOUR' | 'BUNDLE'})}
               >
                 <option value="PIECE">Piece</option>
                 <option value="KG">Kilo</option>

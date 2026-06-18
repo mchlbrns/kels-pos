@@ -16,7 +16,7 @@ export interface Order {
   local_id: string; // local temporary ID
   customer_id?: string;
   total: number;
-  status: 'PAID' | 'HELD' | 'REFUNDED';
+  status: 'PENDING' | 'HELD' | 'COMPLETED' | 'REFUNDED';
   payment_type: 'CASH' | 'DIGITAL' | 'VOUCHER';
   created_at: number;
   items: OrderItem[];
@@ -27,12 +27,13 @@ export interface OrderItem {
   product_id: string;
   quantity: number;
   price_at_sale: number;
+  unit: string;
 }
 
 export interface SyncEntry {
   id: string;
   entity_type: 'ORDER' | 'PRODUCT' | 'CUSTOMER';
-  payload: any;
+  payload: Product | Order | Customer;
   status: 'PENDING' | 'SYNCED' | 'FAILED';
   retry_count: number;
   created_at: number;
@@ -42,7 +43,9 @@ export interface Customer {
   id: string;
   name: string;
   phone?: string;
+  loyalty_id?: string;
   points: number;
+  total_visits: number;
 }
 
 export class POSDatabase extends Dexie {
@@ -53,10 +56,10 @@ export class POSDatabase extends Dexie {
 
   constructor() {
     super('POSDatabase');
-    this.version(2).stores({
-      products: 'id, name, sku_barcode',
-      orders: 'id, local_id, status, sync_status',
-      customers: 'id, name, phone',
+    this.version(3).stores({
+      products: 'id, name, sku_barcode, type',
+      orders: 'id, local_id, status, sync_status, customer_id',
+      customers: 'id, name, phone, loyalty_id',
       syncQueue: 'id, entity_type, status'
     });
   }
