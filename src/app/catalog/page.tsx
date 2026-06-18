@@ -26,6 +26,7 @@ export default function CatalogPage() {
     is_variable: false,
     allow_override: false,
     base_price: 0,
+    stock: 10,
   });
 
   const handleToggleAdd = () => {
@@ -38,6 +39,7 @@ export default function CatalogPage() {
         is_variable: false,
         allow_override: false,
         base_price: 0,
+        stock: 10,
       });
     } else {
       setIsAdding(true);
@@ -54,6 +56,7 @@ export default function CatalogPage() {
       is_variable: product.is_variable,
       allow_override: product.allow_override,
       sku_barcode: product.sku_barcode,
+      stock: product.stock,
     });
     setIsAdding(true);
   };
@@ -69,20 +72,14 @@ export default function CatalogPage() {
       is_variable: formData.is_variable || false,
       allow_override: formData.allow_override || false,
       sku_barcode: formData.sku_barcode || undefined,
+      stock: formData.type === 'PRODUCT' ? (formData.stock !== undefined ? Number(formData.stock) : 0) : undefined,
     };
 
     if (editingId) {
-      // Retrieve old product to preserve stock property if it exists
-      const existingProduct = await db.products.get(editingId);
-      if (existingProduct) {
-        productData.stock = existingProduct.stock;
-      }
       await db.products.put(productData);
       await addToSyncQueue('PRODUCT', productData);
       alert('Product updated successfully!');
     } else {
-      // Set default stock count for new items
-      productData.stock = 10;
       await db.products.add(productData);
       await addToSyncQueue('PRODUCT', productData);
       alert('Product added successfully!');
@@ -96,6 +93,7 @@ export default function CatalogPage() {
       is_variable: false,
       allow_override: false,
       base_price: 0,
+      stock: 10,
     });
   };
 
@@ -113,6 +111,7 @@ export default function CatalogPage() {
         is_variable: false,
         allow_override: false,
         base_price: 0,
+        stock: 10,
       });
     }
   };
@@ -254,6 +253,22 @@ export default function CatalogPage() {
               />
             </div>
 
+            {/* Stock Level (only for PRODUCT type) */}
+            {formData.type === 'PRODUCT' && (
+              <div className={styles.field}>
+                <label>Stock Level</label>
+                <input 
+                  type="number"
+                  min="0"
+                  required
+                  className="pos-input"
+                  placeholder="0"
+                  value={formData.stock !== undefined ? formData.stock : ''} 
+                  onChange={e => setFormData({...formData, stock: Number(e.target.value)})}
+                />
+              </div>
+            )}
+
             {/* Toggles */}
             <div className={styles.checkboxRow}>
               {/* Variable Toggle */}
@@ -327,6 +342,20 @@ export default function CatalogPage() {
             
             <div className={styles.cardBottom}>
               <span className={styles.unitLabel}>{p.unit}</span>
+              {p.type === 'PRODUCT' && p.stock !== undefined && (
+                <span 
+                  className="pos-badge" 
+                  style={{
+                    backgroundColor: p.stock === 0 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(71, 85, 105, 0.15)',
+                    color: p.stock === 0 ? '#ef4444' : 'var(--text-secondary)',
+                    borderColor: p.stock === 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(71, 85, 105, 0.3)',
+                    fontSize: '11px',
+                    padding: '2px 8px'
+                  }}
+                >
+                  Stock: {p.stock}
+                </span>
+              )}
               {p.sku_barcode && (
                 <span className={styles.skuBadge}>SKU: {p.sku_barcode}</span>
               )}

@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { 
   Search, Barcode, History, Play, Pause, X, Settings, 
-  CreditCard, AlertTriangle, CheckCircle, Plus, User, Trash2 
+  CreditCard, AlertTriangle, Plus, User, Trash2 
 } from 'lucide-react';
 import CatalogGrid from '@/components/POS/Catalog/CatalogGrid';
 import CartSidebar from '@/components/POS/Cart/CartSidebar';
