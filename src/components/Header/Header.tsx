@@ -61,7 +61,13 @@ export default function Header() {
             </div>
             {isManager && (
               <button 
-                onClick={() => window.dispatchEvent(new CustomEvent('open-pos-settings'))} 
+                onClick={() => {
+                  if (pathname === '/pos') {
+                    window.dispatchEvent(new CustomEvent('open-pos-settings'));
+                  } else {
+                    window.location.href = '/pos?settings=true';
+                  }
+                }} 
                 className={styles.settingsBtn}
                 title="Settings"
               >
@@ -91,7 +97,11 @@ export default function Header() {
                     type="button"
                     onClick={() => {
                       setIsUserMenuOpen(false);
-                      window.dispatchEvent(new CustomEvent('open-pos-settings'));
+                      if (pathname === '/pos') {
+                        window.dispatchEvent(new CustomEvent('open-pos-settings'));
+                      } else {
+                        window.location.href = '/pos?settings=true';
+                      }
                     }}
                   >
                     <Settings size={16} />

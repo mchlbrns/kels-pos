@@ -55,7 +55,12 @@ export default function POSPage() {
     return true;
   });
   
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && window.location.search.includes('settings=true')) {
+      return true;
+    }
+    return false;
+  });
   
   // Discount states
   const [discount, setDiscount] = useState(0);
@@ -137,9 +142,16 @@ export default function POSPage() {
           { id: '5', name: 'Fresh Milk', type: 'PRODUCT', unit: 'LITER', base_price: 1.20, is_variable: true, allow_override: true, sku_barcode: '1004', stock: 8 },
         ];
         await db.products.bulkPut(mockProducts);
+        for (const product of mockProducts) {
+          await addToSyncQueue('PRODUCT', product);
+        }
       }
     };
     checkAndSeed();
+
+    if (typeof window !== 'undefined' && window.location.search.includes('settings=true')) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
 
     // Listen to settings gear clicks from Header
     const handleOpenSettings = () => {

@@ -4,6 +4,7 @@ import React from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Product } from '@/lib/db';
 import { Package, Tag } from 'lucide-react';
+import { addToSyncQueue } from '@/lib/sync';
 
 interface CatalogGridProps {
   searchTerm: string;
@@ -224,4 +225,7 @@ async function seedMockData() {
   ];
   
   await db.products.bulkPut(mockProducts);
+  for (const product of mockProducts) {
+    await addToSyncQueue('PRODUCT', product);
+  }
 }
