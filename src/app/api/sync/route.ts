@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { type SyncEntry, type Order, type Customer } from '@/lib/db';
+import { type SyncEntry, type Order, type Customer, type Product } from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
@@ -15,16 +15,27 @@ export async function POST(request: Request) {
       await prisma.order.upsert({
         where: { id: orderPayload.id },
         update: {
-          status: orderPayload.status,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          status: orderPayload.status as any,
           total: orderPayload.total,
           paymentType: orderPayload.payment_type,
+          items: {
+            deleteMany: {}, // Delete existing items to recreate them
+            create: orderPayload.items.map((item) => ({
+              productId: item.product_id,
+              quantity: item.quantity,
+              priceAtSale: item.price_at_sale,
+              unit: item.unit,
+            })),
+          },
         },
         create: {
           id: orderPayload.id,
           localId: orderPayload.local_id,
           customerId: orderPayload.customer_id,
           total: orderPayload.total,
-          status: orderPayload.status,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          status: orderPayload.status as any,
           paymentType: orderPayload.payment_type,
           createdAt: new Date(orderPayload.created_at),
           items: {
@@ -55,6 +66,30 @@ export async function POST(request: Request) {
           loyaltyId: customerPayload.loyalty_id,
           points: customerPayload.points,
           totalVisits: customerPayload.total_visits,
+        },
+      });
+    } else if (entity_type === 'PRODUCT') {
+      const productPayload = payload as Product;
+      await prisma.product.upsert({
+        where: { id: productPayload.id },
+        update: {
+          name: productPayload.name,
+          type: productPayload.type,
+          unit: productPayload.unit,
+          basePrice: productPayload.base_price,
+          isVariable: productPayload.is_variable,
+          allowOverride: productPayload.allow_override,
+          skuBarcode: productPayload.sku_barcode || null,
+        },
+        create: {
+          id: productPayload.id,
+          name: productPayload.name,
+          type: productPayload.type,
+          unit: productPayload.unit,
+          basePrice: productPayload.base_price,
+          isVariable: productPayload.is_variable,
+          allowOverride: productPayload.allow_override,
+          skuBarcode: productPayload.sku_barcode || null,
         },
       });
     }

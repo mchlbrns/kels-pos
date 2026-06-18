@@ -35,11 +35,15 @@ export function useCart() {
   }, []);
 
   const updateQuantity = useCallback((productId: string, quantity: number) => {
-    setItems(current => 
-      current.map(item => 
-        item.product_id === productId ? { ...item, quantity } : item
-      )
-    );
+    if (quantity <= 0) {
+      setItems(current => current.filter(item => item.product_id !== productId));
+    } else {
+      setItems(current => 
+        current.map(item => 
+          item.product_id === productId ? { ...item, quantity } : item
+        )
+      );
+    }
   }, []);
 
   const clearCart = useCallback(() => {

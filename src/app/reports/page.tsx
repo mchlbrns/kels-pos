@@ -9,11 +9,14 @@ import {
   Users, 
   ShoppingBag, 
   ArrowUpRight, 
-  ArrowDownRight,
-  Package,
   Calendar,
-  Filter
+  Filter,
+  Lightbulb
 } from 'lucide-react';
+
+const formatPrice = (amount: number) => {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+};
 
 export default function ReportsPage() {
   const startOfDay = new Date();
@@ -38,133 +41,240 @@ export default function ReportsPage() {
 
   const products = useLiveQuery(() => db.products.toArray()) || [];
   
+  // Best selling items
   const topItems = Object.entries(itemCounts)
-    .map(([id, qty]) => ({
-      name: products.find(p => p.id === id)?.name || 'Unknown',
-      qty
-    }))
+    .map(([id, qty]) => {
+      const prod = products.find(p => p.id === id);
+      const name = prod?.name || 'Unknown Product';
+      const basePrice = prod?.base_price || 0;
+      const revenue = qty * basePrice;
+      return { name, qty, revenue };
+    })
     .sort((a, b) => b.qty - a.qty)
     .slice(0, 5);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      {/* Header */}
-      <div className="flex justify-between items-end mb-8">
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', padding: '24px 32px', maxWidth: '1200px', width: '100%', margin: '0 auto' }}>
+      
+      {/* PAGE HEADER */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 className="text-3xl font-black text-gray-900 mb-2">Business Insights</h1>
-          <p className="text-gray-500 flex items-center gap-2">
-            <Calendar size={16} />
+          <h1 style={{ fontSize: '26px', fontWeight: 700, color: 'white' }}>Business Insights</h1>
+          {/* Date Chip */}
+          <div 
+            style={{ 
+              backgroundColor: 'var(--bg-surface)', 
+              border: '1px solid var(--border)', 
+              borderRadius: '999px', 
+              padding: '4px 12px', 
+              fontSize: '13px', 
+              color: 'var(--text-secondary)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              marginTop: '6px'
+            }}
+          >
+            <Calendar size={14} />
             Today, {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-          </p>
+          </div>
         </div>
-        <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50 transition shadow-sm">
-            <Filter size={18} />
+        
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="pos-btn pos-btn-ghost" style={{ height: '38px' }}>
+            <Filter size={16} />
             Filter
           </button>
           <button 
             onClick={() => window.print()}
-            className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-200"
+            className="pos-btn pos-btn-ghost"
+            style={{ height: '38px' }}
           >
-            <Printer size={18} />
+            <Printer size={16} />
             Print Report
           </button>
         </div>
       </div>
 
-      {/* Hero Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+      {/* KPI STAT CARDS ROW */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
         <StatCard 
           title="Gross Revenue" 
-          value={`$${totalSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-          icon={<TrendingUp className="text-blue-600" />}
+          value={formatPrice(totalSales)}
+          icon={<TrendingUp size={16} style={{ color: '#3b82f6' }} />}
           trend="+12.5%"
           isPositive={true}
         />
         <StatCard 
           title="Total Orders" 
           value={todayOrders.length.toString()}
-          icon={<ShoppingBag className="text-purple-600" />}
+          icon={<ShoppingBag size={16} style={{ color: '#a855f7' }} />}
           trend="+5.2%"
           isPositive={true}
         />
         <StatCard 
           title="Average Order" 
-          value={`$${averageOrderValue.toFixed(2)}`}
-          icon={<ArrowUpRight className="text-orange-600" />}
+          value={formatPrice(averageOrderValue)}
+          icon={<ArrowUpRight size={16} style={{ color: '#f59e0b' }} />}
           trend="-2.1%"
           isPositive={false}
         />
         <StatCard 
           title="Customer Visits" 
           value={todayOrders.filter(o => o.customer_id).length.toString()}
-          icon={<Users className="text-green-600" />}
+          icon={<Users size={16} style={{ color: '#22c55e' }} />}
           trend="+18%"
           isPositive={true}
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Top Products */}
-        <div className="lg:col-span-2 bg-white rounded-3xl p-8 border border-gray-100 shadow-sm">
-          <div className="flex justify-between items-center mb-8">
-            <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-              <Package size={20} className="text-blue-500" />
-              Best Selling Products
-            </h3>
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Units Sold</span>
-          </div>
-          
-          <div className="space-y-6">
-            {topItems.length > 0 ? topItems.map((item, idx) => (
-              <div key={item.name} className="flex items-center gap-4">
-                <span className="text-2xl font-black text-gray-100 w-8">{idx + 1}</span>
-                <div className="flex-1">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="font-bold text-gray-700">{item.name}</span>
-                    <span className="font-black text-blue-600">{item.qty.toFixed(1)}</span>
-                  </div>
-                  <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                    <div 
-                      className="bg-blue-500 h-full rounded-full" 
-                      style={{ width: `${(item.qty / topItems[0].qty) * 100}%` }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            )) : (
-              <div className="text-center py-12 text-gray-400 italic">No data available for today yet.</div>
-            )}
-          </div>
-        </div>
-
-        {/* Payment Breakdown */}
-        <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm">
-          <h3 className="text-xl font-bold text-gray-800 mb-8 flex items-center gap-2">
-            <TrendingUp size={20} className="text-green-500" />
-            Payment Streams
+      {/* BOTTOM SECTION */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
+        
+        {/* BEST SELLING PRODUCTS */}
+        <div className="pos-card" style={{ padding: '20px 24px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'white', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>🏆</span> Best Selling Products
           </h3>
           
-          <div className="space-y-4">
-            {Object.entries(paymentBreakdown).map(([type, amount]) => (
-              <div key={type} className="p-4 bg-gray-50 rounded-2xl flex justify-between items-center border border-transparent hover:border-green-200 hover:bg-green-50 transition">
-                <span className="font-bold text-gray-600 uppercase text-xs tracking-wider">{type}</span>
-                <span className="font-black text-gray-800 text-lg">${amount.toFixed(2)}</span>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {topItems.length > 0 ? (
+              topItems.map((item, idx) => {
+                const isLast = idx === topItems.length - 1;
+                return (
+                  <div 
+                    key={item.name} 
+                    style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      padding: '10px 0', 
+                      borderBottom: isLast ? 'none' : '1px solid var(--border)' 
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      {/* Rank badge */}
+                      <span 
+                        style={{ 
+                          backgroundColor: 'var(--bg-elevated)', 
+                          color: 'var(--text-secondary)', 
+                          fontSize: '12px', 
+                          fontWeight: 700, 
+                          minWidth: '24px', 
+                          height: '24px', 
+                          borderRadius: '50%', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center' 
+                        }}
+                      >
+                        {idx + 1}
+                      </span>
+                      <span style={{ color: 'white', fontWeight: 500, marginLeft: '10px' }}>{item.name}</span>
+                    </div>
+                    
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+                        {item.qty.toFixed(0)} units
+                      </span>
+                      <span style={{ color: 'var(--primary)', fontWeight: 600, marginLeft: '16px', fontVariantNumeric: 'tabular-nums' }}>
+                        {formatPrice(item.revenue)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '13px' }}>
+                No sales data yet.
               </div>
-            ))}
-            {Object.keys(paymentBreakdown).length === 0 && (
-              <div className="text-center py-12 text-gray-400 italic">Awaiting first sale...</div>
             )}
           </div>
+        </div>
 
-          <div className="mt-8 p-6 bg-blue-50 rounded-2xl border border-blue-100">
-            <p className="text-blue-800 text-xs font-bold uppercase mb-2">Pro Tip</p>
-            <p className="text-blue-600 text-sm leading-relaxed">
-              Digital payments are up <span className="font-bold">24%</span> this week. Consider promoting your loyalty app at checkout.
-            </p>
+        {/* PAYMENT STREAMS */}
+        <div className="pos-card" style={{ padding: '20px 24px' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'white', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>💳</span> Payment Streams
+          </h3>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {Object.entries(paymentBreakdown).map(([type, amount]) => {
+              const pct = totalSales > 0 ? (amount / totalSales) * 100 : 0;
+              const themeColor = 
+                type === 'CASH' ? 'var(--success)' : 
+                type === 'CARD' ? 'var(--primary)' : 
+                'var(--warning)';
+
+              return (
+                <div key={type} style={{ display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span 
+                        className="pos-badge"
+                        style={{
+                          backgroundColor: 
+                            type === 'CASH' ? 'rgba(34, 197, 94, 0.15)' : 
+                            type === 'CARD' ? 'rgba(59, 130, 246, 0.15)' : 
+                            'rgba(245, 158, 11, 0.15)',
+                          color: themeColor,
+                          borderColor:
+                            type === 'CASH' ? 'rgba(34, 197, 94, 0.3)' : 
+                            type === 'CARD' ? 'rgba(59, 130, 246, 0.3)' : 
+                            'rgba(245, 158, 11, 0.3)',
+                        }}
+                      >
+                        {type}
+                      </span>
+                      <span style={{ color: 'white', fontWeight: 500, marginLeft: '10px' }}>{type} Payments</span>
+                    </div>
+                    <span style={{ color: 'white', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                      {formatPrice(amount)}
+                    </span>
+                  </div>
+                  {/* Progress bar */}
+                  <div style={{ height: '4px', borderRadius: '999px', backgroundColor: 'var(--bg-accent)', marginTop: '6px', overflow: 'hidden', width: '100%' }}>
+                    <div style={{ height: '100%', backgroundColor: themeColor, width: `${pct}%`, borderRadius: '999px', transition: 'width 200ms ease' }}></div>
+                  </div>
+                </div>
+              );
+            })}
+            
+            {Object.keys(paymentBreakdown).length === 0 && (
+              <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '13px' }}>
+                Awaiting first sale...
+              </div>
+            )}
           </div>
         </div>
+
       </div>
+
+      {/* PRO TIP SECTION */}
+      <div 
+        style={{ 
+          backgroundColor: 'rgba(59, 130, 246, 0.08)', 
+          border: '1px solid rgba(59, 130, 246, 0.2)', 
+          borderRadius: 'var(--radius-md)', 
+          padding: '14px 18px', 
+          display: 'flex', 
+          alignItems: 'flex-start', 
+          gap: '12px',
+          marginTop: '20px' 
+        }}
+      >
+        <Lightbulb size={20} style={{ color: 'var(--primary)', flexShrink: 0, marginTop: '2px' }} />
+        <div>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>
+            Pro Tip
+          </span>
+          <span style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            Digital payments are up 24% this week. Consider promoting your loyalty app at checkout.
+          </span>
+        </div>
+      </div>
+
     </div>
   );
 }
@@ -179,20 +289,46 @@ interface StatCardProps {
 
 function StatCard({ title, value, icon, trend, isPositive }: StatCardProps) {
   return (
-    <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition group">
-      <div className="flex justify-between items-start mb-4">
-        <div className="p-3 bg-gray-50 rounded-2xl group-hover:scale-110 transition">
+    <div 
+      className="pos-card"
+      style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '8px' }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div 
+          style={{ 
+            width: '32px', 
+            height: '32px', 
+            borderRadius: 'var(--radius-sm)', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            backgroundColor: 
+              title === 'Gross Revenue' ? 'rgba(59, 130, 246, 0.15)' :
+              title === 'Total Orders' ? 'rgba(168, 85, 247, 0.15)' :
+              title === 'Average Order' ? 'rgba(245, 158, 11, 0.15)' :
+              'rgba(34, 197, 94, 0.15)'
+          }}
+        >
           {icon}
         </div>
-        <div className={`flex items-center text-xs font-bold px-2 py-1 rounded-lg ${isPositive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-          {isPositive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-          {trend}
+        <div 
+          style={{ 
+            fontSize: '12px', 
+            fontWeight: 600, 
+            padding: '2px 8px', 
+            borderRadius: '999px',
+            backgroundColor: isPositive ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+            color: isPositive ? '#22c55e' : '#ef4444',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '2px'
+          }}
+        >
+          <span>{isPositive ? '↑' : '↓'}</span> {trend}
         </div>
       </div>
-      <div>
-        <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
-        <h4 className="text-2xl font-black text-gray-900 tracking-tight">{value}</h4>
-      </div>
+      <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500 }}>{title}</span>
+      <span style={{ fontSize: '28px', fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{value}</span>
     </div>
   );
 }

@@ -28,6 +28,7 @@ enum OrderStatus {
   HELD
   COMPLETED
   REFUNDED
+  VOIDED
 }
 
 model Product {

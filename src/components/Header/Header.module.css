@@ -1,10 +1,12 @@
 .header {
-  padding: 1rem;
-  border-bottom: 1px solid #eee;
+  height: 56px;
+  width: 100%;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  background-color: #fff;
+  justify-content: space-between;
   position: sticky;
   top: 0;
   z-index: 100;
@@ -13,60 +15,109 @@
 .left {
   display: flex;
   align-items: center;
-  gap: 2rem;
+  gap: 24px;
 }
 
 .title {
   text-decoration: none;
-  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 16px;
+  font-weight: 700;
+  color: white;
 }
 
-.title h1 {
-  margin: 0;
-  font-size: 1.25rem;
+.logoIcon {
+  color: var(--primary);
 }
 
 .nav {
   display: flex;
-  gap: 1rem;
+  align-items: center;
+  gap: 4px;
 }
 
-.nav a {
-  text-decoration: none;
-  color: #666;
+.navLink {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
   font-weight: 500;
+  text-decoration: none;
+  color: var(--text-secondary);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid transparent;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
 }
 
-.nav a:hover {
-  color: #000;
+.navLink:hover {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.activeNavLink {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+  border-bottom-color: var(--primary);
 }
 
 .right {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 16px;
 }
 
-.user {
+.userBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.userBadge svg {
+  color: var(--text-secondary);
+}
+
+.settingsBtn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: all 150ms ease;
 }
 
-.user span {
-  font-size: 12px;
-  background: #eee;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-weight: bold;
+.settingsBtn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-elevated);
 }
 
 .logoutBtn {
-  background: none;
+  background: transparent;
   border: none;
-  color: #f44336;
+  color: var(--danger);
   cursor: pointer;
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
   font-size: 14px;
+  font-weight: 500;
+  transition: all 150ms ease;
+}
+
+.logoutBtn:hover {
+  background-color: rgba(239, 68, 68, 0.1);
 }
 
 .login {
@@ -76,12 +127,15 @@
 
 .login button {
   padding: 6px 12px;
-  border: 1px solid #ddd;
-  background: #fff;
-  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
   cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .login button:hover {
-  background: #f5f5f5;
+  background: var(--bg-accent);
 }

@@ -9,6 +9,7 @@ export interface Product {
   is_variable: boolean;
   allow_override: boolean;
   sku_barcode?: string;
+  stock?: number; // Optional stock/inventory count
 }
 
 export interface Order {
@@ -16,11 +17,14 @@ export interface Order {
   local_id: string; // local temporary ID
   customer_id?: string;
   total: number;
-  status: 'PENDING' | 'HELD' | 'COMPLETED' | 'REFUNDED';
-  payment_type: 'CASH' | 'DIGITAL' | 'VOUCHER';
+  status: 'PENDING' | 'HELD' | 'COMPLETED' | 'REFUNDED' | 'VOIDED';
+  payment_type: 'CASH' | 'CARD' | 'SPLIT' | 'DIGITAL' | 'VOUCHER';
   created_at: number;
   items: OrderItem[];
   sync_status: 'PENDING' | 'SYNCED' | 'FAILED';
+  discount?: number; // Applied discount amount
+  tax?: number; // Calculated tax amount
+  cashier?: string; // Cashier role/name
 }
 
 export interface OrderItem {
@@ -56,9 +60,9 @@ export class POSDatabase extends Dexie {
 
   constructor() {
     super('POSDatabase');
-    this.version(3).stores({
+    this.version(4).stores({
       products: 'id, name, sku_barcode, type',
-      orders: 'id, local_id, status, sync_status, customer_id',
+      orders: 'id, local_id, status, sync_status, customer_id, created_at',
       customers: 'id, name, phone, loyalty_id',
       syncQueue: 'id, entity_type, status'
     });

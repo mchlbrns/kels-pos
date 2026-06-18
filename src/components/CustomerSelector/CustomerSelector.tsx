@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { db, type Customer } from '@/lib/db';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { UserPlus, UserCheck, Search, X } from 'lucide-react';
+import { UserPlus, UserCheck, Search, X, User, UserX, Phone } from 'lucide-react';
 import styles from './CustomerSelector.module.css';
 import { addToSyncQueue } from '@/lib/sync';
 
@@ -31,7 +31,7 @@ export default function CustomerSelector({ selectedCustomer, onSelect }: Props) 
       phone: newPhone,
       points: 0,
       total_visits: 0,
-      loyalty_id: `LOY-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+      loyalty_id: `LOY-${Math.random().toString(36).substring(2, 11).toUpperCase()}`
     };
     await db.customers.add(newCustomer);
     await addToSyncQueue('CUSTOMER', newCustomer);
@@ -42,72 +42,136 @@ export default function CustomerSelector({ selectedCustomer, onSelect }: Props) 
     setNewPhone('');
   };
 
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(part => part[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   return (
     <div className={styles.container}>
       {selectedCustomer ? (
         <div className={styles.selected}>
           <div className={styles.info}>
             <UserCheck size={20} />
-            <div>
-              <strong>{selectedCustomer.name}</strong>
-              <span>{selectedCustomer.points} Points</span>
+            <div className={styles.infoContent}>
+              <span className={styles.infoName}>{selectedCustomer.name}</span>
+              <span className={styles.infoPoints}>{selectedCustomer.points} pts</span>
             </div>
           </div>
-          <button onClick={() => onSelect(null)} className={styles.remove}>
+          <button onClick={() => onSelect(null)} className={styles.remove} title="Remove Customer">
             <X size={16} />
           </button>
         </div>
       ) : (
         <button className={styles.placeholder} onClick={() => setIsSearching(true)}>
           <UserPlus size={20} />
-          <span>Add/Select Customer</span>
+          <span>Add / Select Customer</span>
         </button>
       )}
 
       {isSearching && (
         <div className={styles.modalOverlay}>
           <div className={styles.modal}>
+            {/* Modal Header */}
             <div className={styles.modalHeader}>
-              <h3>Customer Lookup</h3>
-              <button onClick={() => setIsSearching(false)}><X /></button>
+              <h3>
+                <User size={20} className={styles.headerIcon} />
+                Customer Lookup
+              </h3>
+              <button onClick={() => setIsSearching(false)}>
+                <X size={18} />
+              </button>
             </div>
 
-            <div className={styles.searchBox}>
-              <Search size={18} />
-              <input 
-                placeholder="Search name or phone..." 
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-                autoFocus
-              />
-            </div>
+            {/* Modal Body */}
+            <div className={styles.modalBody}>
+              {/* Search input box */}
+              <div className={styles.searchBox}>
+                <Search size={18} />
+                <input 
+                  placeholder="Search name or phone number..." 
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  autoFocus
+                />
+              </div>
 
-            <div className={styles.results}>
-              {customers?.map(c => (
-                <button key={c.id} onClick={() => { onSelect(c); setIsSearching(false); }} className={styles.resultItem}>
-                  <strong>{c.name}</strong>
-                  <span>{c.phone || 'No phone'}</span>
-                </button>
-              ))}
-              {searchTerm && customers?.length === 0 && !isAdding && (
-                <p className={styles.noResults}>No customer found.</p>
+              {/* Results list */}
+              {searchTerm && (
+                <div className={styles.results}>
+                  {customers?.map(c => (
+                    <button 
+                      key={c.id} 
+                      onClick={() => { onSelect(c); setIsSearching(false); }} 
+                      className={styles.resultItem}
+                    >
+                      <div className={styles.resultLeft}>
+                        <div className={styles.avatar}>
+                          {getInitials(c.name)}
+                        </div>
+                        <div className={styles.resultInfo}>
+                          <span className={styles.resultName}>{c.name}</span>
+                          <span className={styles.resultPhone}>{c.phone || 'No phone'}</span>
+                        </div>
+                      </div>
+                      <span className={styles.pointsBadge}>
+                        {c.points} pts
+                      </span>
+                    </button>
+                  ))}
+                  {customers?.length === 0 && !isAdding && (
+                    <div className={styles.noResults}>
+                      <UserX size={32} />
+                      <span className={styles.noResultsMain}>No customer found.</span>
+                      <span className={styles.noResultsSub}>Try a different name or phone number</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {isAdding && (
+                <>
+                  <div className={styles.divider}></div>
+                  <form onSubmit={handleAddCustomer} className={styles.addForm}>
+                    <div className={styles.formInputWrapper}>
+                      <User size={16} />
+                      <input 
+                        placeholder="Customer Name" 
+                        required 
+                        value={newName} 
+                        onChange={e => setNewName(e.target.value)} 
+                      />
+                    </div>
+                    <div className={styles.formInputWrapper}>
+                      <Phone size={16} />
+                      <input 
+                        placeholder="Phone Number (Optional)" 
+                        value={newPhone} 
+                        onChange={e => setNewPhone(e.target.value)} 
+                      />
+                    </div>
+                    <button type="submit" className={styles.saveBtn}>
+                      Save Customer
+                    </button>
+                  </form>
+                </>
               )}
             </div>
 
-            {!isAdding ? (
-              <button className={styles.toggleAdd} onClick={() => setIsAdding(true)}>
-                + Create New Customer
+            {/* Modal Footer */}
+            <div className={styles.modalFooter}>
+              <button 
+                type="button" 
+                className={styles.toggleAddBtn} 
+                onClick={() => setIsAdding(!isAdding)}
+              >
+                {isAdding ? '− Cancel' : '＋ Create New Customer'}
               </button>
-            ) : (
-              <form onSubmit={handleAddCustomer} className={styles.addForm}>
-                <input placeholder="Customer Name" required value={newName} onChange={e => setNewName(e.target.value)} />
-                <input placeholder="Phone Number (Optional)" value={newPhone} onChange={e => setNewPhone(e.target.value)} />
-                <div className={styles.formButtons}>
-                  <button type="button" onClick={() => setIsAdding(false)}>Cancel</button>
-                  <button type="submit" className={styles.submit}>Save Customer</button>
-                </div>
-              </form>
-            )}
+            </div>
           </div>
         </div>
       )}

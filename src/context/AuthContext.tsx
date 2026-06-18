@@ -13,14 +13,15 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRole] = useState<Role | null>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('pos_role') as Role;
-    }
-    return null;
-  });
+  const [role, setRole] = useState<Role | null>(null);
 
   useEffect(() => {
+    const savedRole = localStorage.getItem('pos_role') as Role;
+    if (savedRole) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRole(savedRole);
+    }
+
     // Sync with localStorage if it changes elsewhere
     const handleStorage = () => {
       const savedRole = localStorage.getItem('pos_role') as Role;
