@@ -6,6 +6,7 @@ import { addToSyncQueue } from '@/lib/sync';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Search, Package } from 'lucide-react';
 import styles from './Catalog.module.css';
+import { v4 as uuidv4 } from 'uuid';
 
 const formatPrice = (amount: number) => {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
@@ -64,7 +65,7 @@ export default function CatalogPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const productData: Product = {
-      id: editingId || crypto.randomUUID(),
+      id: editingId || uuidv4(),
       name: formData.name || '',
       type: formData.type || 'PRODUCT',
       unit: formData.unit || 'PIECE',

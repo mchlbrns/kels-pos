@@ -1,8 +1,9 @@
 import { db, type Order, type SyncEntry, type Customer, type Product } from './db';
+import { v4 as uuidv4 } from 'uuid';
 
 export async function addToSyncQueue(entityType: SyncEntry['entity_type'], payload: Order | Customer | Product) {
   const syncEntry: SyncEntry = {
-    id: crypto.randomUUID(),
+    id: uuidv4(),
     entity_type: entityType,
     payload,
     status: 'PENDING',

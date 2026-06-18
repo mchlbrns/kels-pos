@@ -6,6 +6,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { UserPlus, UserCheck, Search, X, User, UserX, Phone } from 'lucide-react';
 import styles from './CustomerSelector.module.css';
 import { addToSyncQueue } from '@/lib/sync';
+import { v4 as uuidv4 } from 'uuid';
 
 interface Props {
   selectedCustomer: Customer | null;
@@ -26,7 +27,7 @@ export default function CustomerSelector({ selectedCustomer, onSelect }: Props) 
   const handleAddCustomer = async (e: React.FormEvent) => {
     e.preventDefault();
     const newCustomer: Customer = {
-      id: crypto.randomUUID(),
+      id: uuidv4(),
       name: newName,
       phone: newPhone,
       points: 0,
