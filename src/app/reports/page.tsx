@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
+import { pullFromServer } from '@/lib/sync';
 import { 
   Printer, 
   TrendingUp, 
@@ -15,6 +16,12 @@ import {
 } from 'lucide-react';
 
 export default function ReportsPage() {
+  useEffect(() => {
+    if (typeof window !== 'undefined' && navigator.onLine) {
+      pullFromServer();
+    }
+  }, []);
+
   const [currency] = useState<'PHP' | 'USD'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('pos_currency');
@@ -31,9 +38,13 @@ export default function ReportsPage() {
   const startOfDay = new Date();
   startOfDay.setHours(0,0,0,0);
 
-  const todayOrders = useLiveQuery(() => 
+  const rawTodayOrders = useLiveQuery(() => 
     db.orders.where('created_at').above(startOfDay.getTime()).toArray()
   ) || [];
+
+  const todayOrders = rawTodayOrders.filter(
+    o => o.status === 'COMPLETED'
+  );
 
   const totalSales = todayOrders.reduce((sum, o) => sum + o.total, 0);
   const averageOrderValue = todayOrders.length > 0 ? totalSales / todayOrders.length : 0;
@@ -63,7 +74,7 @@ export default function ReportsPage() {
     .slice(0, 5);
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)', padding: '24px 32px', maxWidth: '1200px', width: '100%', margin: '0 auto' }}>
+    <div className="reports-page-container">
       
       {/* PAGE HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
@@ -139,7 +150,7 @@ export default function ReportsPage() {
       </div>
 
       {/* BOTTOM SECTION */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
         
         {/* BEST SELLING PRODUCTS */}
         <div className="pos-card" style={{ padding: '20px 24px' }}>

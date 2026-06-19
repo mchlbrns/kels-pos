@@ -25,7 +25,7 @@
   gap: 6px;
   font-size: 16px;
   font-weight: 700;
-  color: white;
+  color: var(--text-primary);
 }
 
 .logoIcon {
@@ -207,6 +207,28 @@
   background: var(--bg-accent);
 }
 
+.themeToggleBtn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  transition: all 150ms ease;
+}
+
+.themeToggleBtn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-elevated);
+}
+
+.bottomNav {
+  display: none;
+}
+
 @media (max-width: 767px) {
   .header {
     height: auto;
@@ -233,21 +255,7 @@
   }
 
   .nav {
-    gap: 2px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .navLink {
-    min-height: 44px;
-    padding: 0 9px;
-    font-size: 13px;
-    white-space: nowrap;
-    align-items: center;
+    display: none !important;
   }
 
   .right {
@@ -275,5 +283,55 @@
   .login button {
     padding: 0 10px;
     font-size: 12px;
+  }
+
+  .bottomNav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background-color: var(--bg-surface);
+    border-top: 1px solid var(--border);
+    justify-content: space-around;
+    align-items: center;
+    z-index: 100;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .bottomNavLink {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    gap: 4px;
+    flex: 1;
+    height: 100%;
+    text-decoration: none;
+  }
+
+  .bottomNavLink svg {
+    color: var(--text-secondary);
+    transition: color 150ms ease;
+  }
+
+  .bottomNavLink:hover {
+    color: var(--text-primary);
+  }
+
+  .bottomNavLink:hover svg {
+    color: var(--text-primary);
+  }
+
+  .bottomActiveNavLink {
+    color: var(--primary);
+  }
+
+  .bottomActiveNavLink svg {
+    color: var(--primary);
   }
 }

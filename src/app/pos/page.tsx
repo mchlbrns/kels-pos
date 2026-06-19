@@ -13,7 +13,7 @@ import PinModal from '@/components/PinModal/PinModal';
 import ConfirmModal from '@/components/ConfirmModal/ConfirmModal';
 
 import { db, type Order, type Product, type Customer } from '@/lib/db';
-import { addToSyncQueue } from '@/lib/sync';
+import { addToSyncQueue, pullFromServer } from '@/lib/sync';
 import { v4 as uuidv4 } from 'uuid';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useAuth } from '@/context/AuthContext';
@@ -24,7 +24,20 @@ import CustomerSelector from '@/components/CustomerSelector/CustomerSelector';
 
 
 export default function POSPage() {
-  const { items, addItem, removeItem, updateQuantity, total, clearCart } = useCart();
+  const { 
+    items, 
+    addItem, 
+    removeItem, 
+    updateQuantity, 
+    total, 
+    clearCart,
+    selectedCustomer,
+    setSelectedCustomer,
+    discount,
+    setDiscount,
+    discountType,
+    setDiscountType
+  } = useCart();
   const { session, logout } = useAuth();
   const role = session?.role;
   const { showToast } = useToasts();
@@ -32,7 +45,6 @@ export default function POSPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeMobilePanel, setActiveMobilePanel] = useState<'products' | 'cart'>('products');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isRecallOpen, setIsRecallOpen] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   
@@ -85,6 +97,14 @@ export default function POSPage() {
     return 'Thank you for your business!';
   });
 
+  const [receiptSubHeader, setReceiptSubHeader] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const savedSubHeader = localStorage.getItem('pos_receipt_sub_header');
+      return savedSubHeader || 'Omnichannel Retail\n123 POS Main St, Digital City\nTel: (555) 123-4567';
+    }
+    return 'Omnichannel Retail\n123 POS Main St, Digital City\nTel: (555) 123-4567';
+  });
+
   const [autoPrint, setAutoPrint] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const savedAutoPrint = localStorage.getItem('pos_auto_print');
@@ -105,9 +125,7 @@ export default function POSPage() {
     return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
   };
   
-  // Discount states
-  const [discount, setDiscount] = useState(0);
-  const [discountType, setDiscountType] = useState<'percentage' | 'flat'>('percentage');
+
 
   // Checkout Modal states
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -171,10 +189,75 @@ export default function POSPage() {
   };
 
 
-  // Load settings on mount
+  // Load settings from IndexedDB (fallback to localStorage/defaults)
+  const loadSettingsFromDB = async () => {
+    try {
+      const allSettings = await db.settings.toArray();
+      const settingsMap = new Map(allSettings.map(s => [s.key, s.value]));
+
+      const getSettingValue = (key: string, defaultValue: string) => {
+        if (settingsMap.has(key)) {
+          return settingsMap.get(key) as string;
+        }
+        if (typeof window !== 'undefined') {
+          const local = localStorage.getItem(key);
+          if (local !== null) return local;
+        }
+        return defaultValue;
+      };
+
+      const tax = getSettingValue('pos_tax_rate', '0');
+      const tracking = getSettingValue('pos_inventory_tracking', 'true');
+      const curr = getSettingValue('pos_currency', 'PHP');
+      const threshold = getSettingValue('pos_low_stock_threshold', '5');
+      const sName = getSettingValue('pos_store_name', 'KELS CAFE & RESTO');
+      const footer = getSettingValue('pos_receipt_footer', 'Thank you for your business!');
+      const subHeader = getSettingValue('pos_receipt_sub_header', 'Omnichannel Retail\n123 POS Main St, Digital City\nTel: (555) 123-4567');
+      const ap = getSettingValue('pos_auto_print', 'true');
+
+      setTaxRate(Number(tax));
+      setInventoryTrackingEnabled(tracking === 'true');
+      setCurrency(curr === 'USD' ? 'USD' : 'PHP');
+      setLowStockThreshold(Number(threshold));
+      setStoreName(sName);
+      setReceiptFooter(footer);
+      setReceiptSubHeader(subHeader);
+      setAutoPrint(ap === 'true');
+
+      if (allSettings.length === 0) {
+        const defaults = [
+          { key: 'pos_tax_rate', value: tax },
+          { key: 'pos_inventory_tracking', value: tracking },
+          { key: 'pos_currency', value: curr },
+          { key: 'pos_low_stock_threshold', value: threshold },
+          { key: 'pos_store_name', value: sName },
+          { key: 'pos_receipt_footer', value: footer },
+          { key: 'pos_receipt_sub_header', value: subHeader },
+          { key: 'pos_auto_print', value: ap },
+        ];
+        for (const item of defaults) {
+          await db.settings.put({
+            key: item.key,
+            value: item.value,
+            updated_at: Date.now()
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error loading settings from Dexie:', err);
+    }
+  };
+
   useEffect(() => {
+    setTimeout(() => {
+      loadSettingsFromDB();
+    }, 0);
+
     // Auto-seed database if no products exist
     const checkAndSeed = async () => {
+      if (navigator.onLine) {
+        await pullFromServer();
+      }
       const count = await db.products.count();
       if (count === 0) {
         const mockProducts: Product[] = [
@@ -205,7 +288,11 @@ export default function POSPage() {
       }
     };
     window.addEventListener('open-pos-settings', handleOpenSettings);
-    return () => window.removeEventListener('open-pos-settings', handleOpenSettings);
+    window.addEventListener('pos-settings-synced', loadSettingsFromDB);
+    return () => {
+      window.removeEventListener('open-pos-settings', handleOpenSettings);
+      window.removeEventListener('pos-settings-synced', loadSettingsFromDB);
+    };
   }, [session, showToast]);
 
   useEffect(() => {
@@ -569,13 +656,14 @@ export default function POSPage() {
     showToast('Current sale discarded.', 'INFO');
   };
 
-  const handleSaveSettings = (
+  const handleSaveSettings = async (
     rate: number,
     tracking: boolean,
     curr: 'PHP' | 'USD',
     threshold: number,
     sName: string,
     footer: string,
+    subHeader: string,
     ap: boolean
   ) => {
     setTaxRate(rate);
@@ -584,6 +672,7 @@ export default function POSPage() {
     setLowStockThreshold(threshold);
     setStoreName(sName);
     setReceiptFooter(footer);
+    setReceiptSubHeader(subHeader);
     setAutoPrint(ap);
     localStorage.setItem('pos_tax_rate', rate.toString());
     localStorage.setItem('pos_inventory_tracking', tracking.toString());
@@ -591,9 +680,36 @@ export default function POSPage() {
     localStorage.setItem('pos_low_stock_threshold', threshold.toString());
     localStorage.setItem('pos_store_name', sName);
     localStorage.setItem('pos_receipt_footer', footer);
+    localStorage.setItem('pos_receipt_sub_header', subHeader);
     localStorage.setItem('pos_auto_print', ap.toString());
+
+    try {
+      const settingsToSave = [
+        { key: 'pos_tax_rate', value: rate.toString() },
+        { key: 'pos_inventory_tracking', value: tracking.toString() },
+        { key: 'pos_currency', value: curr },
+        { key: 'pos_low_stock_threshold', value: threshold.toString() },
+        { key: 'pos_store_name', value: sName },
+        { key: 'pos_receipt_footer', value: footer },
+        { key: 'pos_receipt_sub_header', value: subHeader },
+        { key: 'pos_auto_print', value: ap.toString() },
+      ];
+
+      for (const item of settingsToSave) {
+        const settingObj = {
+          key: item.key,
+          value: item.value,
+          updated_at: Date.now()
+        };
+        await db.settings.put(settingObj);
+        await addToSyncQueue('SETTING', settingObj);
+      }
+    } catch (err) {
+      console.error('Error saving settings to db:', err);
+    }
+
     setIsSettingsOpen(false);
-    showToast('Configurations saved.', 'SUCCESS');
+    showToast('Configurations saved and synced.', 'SUCCESS');
   };
 
 
@@ -871,6 +987,7 @@ export default function POSPage() {
           currentLowStockThreshold={lowStockThreshold}
           currentStoreName={storeName}
           currentReceiptFooter={receiptFooter}
+          currentReceiptSubHeader={receiptSubHeader}
           currentAutoPrint={autoPrint}
           onSave={handleSaveSettings}
           onClose={() => setIsSettingsOpen(false)}
@@ -1536,6 +1653,7 @@ export default function POSPage() {
           currency={currency}
           storeName={storeName}
           receiptFooter={receiptFooter}
+          receiptSubHeader={receiptSubHeader}
         />
       )}
 
@@ -1558,6 +1676,7 @@ interface SettingsModalProps {
   currentLowStockThreshold: number;
   currentStoreName: string;
   currentReceiptFooter: string;
+  currentReceiptSubHeader: string;
   currentAutoPrint: boolean;
   onSave: (
     taxRate: number,
@@ -1566,6 +1685,7 @@ interface SettingsModalProps {
     lowStockThreshold: number,
     storeName: string,
     receiptFooter: string,
+    receiptSubHeader: string,
     autoPrint: boolean
   ) => void;
   onClose: () => void;
@@ -1578,6 +1698,7 @@ function SettingsModal({
   currentLowStockThreshold,
   currentStoreName,
   currentReceiptFooter,
+  currentReceiptSubHeader,
   currentAutoPrint,
   onSave,
   onClose
@@ -1588,6 +1709,7 @@ function SettingsModal({
   const [lowStockThreshold, setLowStockThreshold] = useState(currentLowStockThreshold.toString());
   const [storeName, setStoreName] = useState(currentStoreName);
   const [receiptFooter, setReceiptFooter] = useState(currentReceiptFooter);
+  const [receiptSubHeader, setReceiptSubHeader] = useState(currentReceiptSubHeader);
   const [autoPrint, setAutoPrint] = useState(currentAutoPrint);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -1599,6 +1721,7 @@ function SettingsModal({
       Number(lowStockThreshold) || 0,
       storeName,
       receiptFooter,
+      receiptSubHeader,
       autoPrint
     );
   };
@@ -1687,6 +1810,19 @@ function SettingsModal({
             />
           </div>
 
+          {/* Receipt Details / Sub-Header */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Receipt Details / Sub-Header</label>
+            <textarea 
+              required
+              rows={3}
+              className="pos-input"
+              style={{ fontWeight: 600, height: '80px', padding: '8px 12px', resize: 'none', fontFamily: 'monospace', color: 'white', backgroundColor: 'var(--bg-elevated)' }}
+              value={receiptSubHeader}
+              onChange={(e) => setReceiptSubHeader(e.target.value)}
+            />
+          </div>
+
           {/* Receipt Footer Note */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Receipt Footer Note</label>
@@ -1752,9 +1888,10 @@ interface ReceiptModalProps {
   currency: 'PHP' | 'USD';
   storeName: string;
   receiptFooter: string;
+  receiptSubHeader: string;
 }
 
-function ReceiptModal({ order, taxRate, changeDue, cashierName, onClose, currency, storeName, receiptFooter }: ReceiptModalProps) {
+function ReceiptModal({ order, taxRate, changeDue, cashierName, onClose, currency, storeName, receiptFooter, receiptSubHeader }: ReceiptModalProps) {
   const [products, setProducts] = useState<Record<string, Product>>({});
   const formatPrice = (amount: number) => {
     const locale = currency === 'USD' ? 'en-US' : 'en-PH';
@@ -1827,9 +1964,11 @@ function ReceiptModal({ order, taxRate, changeDue, cashierName, onClose, currenc
           {/* Store Header */}
           <div style={{ textAlign: 'center', marginBottom: '16px' }}>
             <span style={{ fontSize: '20px', fontWeight: 700, color: '#1a1a1a', display: 'block' }}>{storeName}</span>
-            <span style={{ fontSize: '12px', color: '#555', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block' }}>Omnichannel Retail</span>
-            <span style={{ fontSize: '12px', color: '#555', display: 'block' }}>123 POS Main St, Digital City</span>
-            <span style={{ fontSize: '12px', color: '#555', display: 'block' }}>Tel: (555) 123-4567</span>
+            {receiptSubHeader.split('\n').map((line, idx) => (
+              <span key={idx} style={{ fontSize: '12px', color: '#555', display: 'block', textTransform: idx === 0 ? 'uppercase' : 'none', letterSpacing: idx === 0 ? '0.05em' : 'normal' }}>
+                {line}
+              </span>
+            ))}
           </div>
 
           {/* Dashed Divider */}

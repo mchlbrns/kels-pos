@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Lock, User, ShieldAlert } from 'lucide-react';
+import { Lock, User, ShieldAlert, Store } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 
 interface LockScreenProps {
@@ -88,8 +88,11 @@ export default function LockScreen({ onLogin }: LockScreenProps) {
           >
             <Lock size={28} />
           </div>
-          <h1 style={{ fontSize: '24px', fontWeight: 800, color: 'white', letterSpacing: '0.02em' }}>⚡ KELS POS</h1>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Omnichannel Retail System</p>
+          <h1 style={{ fontSize: '24px', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '0.02em', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Store size={24} style={{ color: 'var(--primary)' }} />
+            <span>KELS POS</span>
+          </h1>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Enterprise Point of Sale</p>
         </div>
 
         <form onSubmit={handleSubmit} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>

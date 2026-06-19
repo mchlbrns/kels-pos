@@ -36,8 +36,8 @@ export interface OrderItem {
 
 export interface SyncEntry {
   id: string;
-  entity_type: 'ORDER' | 'PRODUCT' | 'CUSTOMER';
-  payload: Product | Order | Customer;
+  entity_type: 'ORDER' | 'PRODUCT' | 'CUSTOMER' | 'SETTING';
+  payload: Product | Order | Customer | Setting;
   status: 'PENDING' | 'SYNCED' | 'FAILED';
   retry_count: number;
   created_at: number;
@@ -52,19 +52,27 @@ export interface Customer {
   total_visits: number;
 }
 
+export interface Setting {
+  key: string;
+  value: string;
+  updated_at: number;
+}
+
 export class POSDatabase extends Dexie {
   products!: Table<Product>;
   orders!: Table<Order>;
   customers!: Table<Customer>;
   syncQueue!: Table<SyncEntry>;
+  settings!: Table<Setting>;
 
   constructor() {
     super('POSDatabase');
-    this.version(4).stores({
+    this.version(5).stores({
       products: 'id, name, sku_barcode, type',
       orders: 'id, local_id, status, sync_status, customer_id, created_at',
       customers: 'id, name, phone, loyalty_id',
-      syncQueue: 'id, entity_type, status'
+      syncQueue: 'id, entity_type, status',
+      settings: 'key'
     });
   }
 }

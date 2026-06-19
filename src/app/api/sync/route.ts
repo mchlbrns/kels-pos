@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { type SyncEntry, type Order, type Customer, type Product } from '@/lib/db';
+import { type SyncEntry, type Order, type Customer, type Product, type Setting } from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
     const entry: SyncEntry = await request.json();
     const { entity_type, payload } = entry;
 
-    console.log(`Processing sync entry: ${entity_type}`, payload.id);
+    const entityId = 'id' in payload ? payload.id : ('key' in payload ? payload.key : 'unknown');
+    console.log(`Processing sync entry: ${entity_type}`, entityId);
 
     if (entity_type === 'ORDER') {
       const orderPayload = payload as Order;
@@ -92,11 +93,88 @@ export async function POST(request: Request) {
           skuBarcode: productPayload.sku_barcode || null,
         },
       });
+    } else if (entity_type === 'SETTING') {
+      const settingPayload = payload as Setting;
+      await prisma.setting.upsert({
+        where: { key: settingPayload.key },
+        update: {
+          value: settingPayload.value,
+          updatedAt: new Date(settingPayload.updated_at),
+        },
+        create: {
+          key: settingPayload.key,
+          value: settingPayload.value,
+          updatedAt: new Date(settingPayload.updated_at),
+        },
+      });
     }
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
     console.error('Sync API Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json(
+      { success: false, error: errorMessage },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET() {
+  try {
+    const products = await prisma.product.findMany();
+    const customers = await prisma.customer.findMany();
+    const orders = await prisma.order.findMany({
+      include: {
+        items: true,
+      },
+    });
+    const settings = await prisma.setting.findMany();
+
+    return NextResponse.json({
+      success: true,
+      products: products.map((p) => ({
+        id: p.id,
+        name: p.name,
+        type: p.type,
+        unit: p.unit,
+        base_price: Number(p.basePrice),
+        is_variable: p.isVariable,
+        allow_override: p.allowOverride,
+        sku_barcode: p.skuBarcode || undefined,
+      })),
+      customers: customers.map((c) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone || undefined,
+        loyalty_id: c.loyaltyId || undefined,
+        points: c.points,
+        total_visits: c.totalVisits,
+      })),
+      orders: orders.map((o) => ({
+        id: o.id,
+        local_id: o.localId || o.id,
+        customer_id: o.customerId || undefined,
+        total: Number(o.total),
+        status: o.status,
+        payment_type: o.paymentType,
+        created_at: new Date(o.createdAt).getTime(),
+        sync_status: 'SYNCED',
+        items: o.items.map((item) => ({
+          product_id: item.productId,
+          quantity: Number(item.quantity),
+          price_at_sale: Number(item.priceAtSale),
+          unit: item.unit,
+        })),
+      })),
+      settings: settings.map((s) => ({
+        key: s.key,
+        value: s.value,
+        updated_at: new Date(s.updatedAt).getTime(),
+      })),
+    });
+  } catch (error: unknown) {
+    console.error('Sync GET API Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       { success: false, error: errorMessage },

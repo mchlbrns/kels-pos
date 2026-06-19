@@ -1,14 +1,20 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { db, type Product } from '@/lib/db';
-import { addToSyncQueue } from '@/lib/sync';
+import { addToSyncQueue, pullFromServer } from '@/lib/sync';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Search, Package } from 'lucide-react';
 import styles from './Catalog.module.css';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function CatalogPage() {
+  useEffect(() => {
+    if (typeof window !== 'undefined' && navigator.onLine) {
+      pullFromServer();
+    }
+  }, []);
+
   const [currency] = useState<'PHP' | 'USD'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('pos_currency');

@@ -33,6 +33,15 @@ const nextConfig = {
     '127.0.0.1:3000',
     ...getLocalIPs()
   ],
+  async redirects() {
+    return [
+      {
+        source: '/',
+        destination: '/pos',
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default withPWA(nextConfig);

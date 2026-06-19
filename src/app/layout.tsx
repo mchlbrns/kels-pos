@@ -3,13 +3,14 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { ToastProvider } from "@/context/ToastContext";
+import { CartProvider } from "@/context/CartContext";
 import RouteGuard from "@/components/RouteGuard/RouteGuard";
 import Header from "@/components/Header/Header";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Omnichannel POS",
+  title: "Kels POS Enterprise",
   description: "Advanced POS & Loyalty System",
   manifest: "/manifest.json",
 };
@@ -26,16 +27,28 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.className}>
+    <html lang="en" className={inter.className} data-theme="dark" suppressHydrationWarning={true}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function() {
+            try {
+              var theme = localStorage.getItem('pos_theme') || 'dark';
+              document.documentElement.setAttribute('data-theme', theme);
+            } catch (e) {}
+          })();
+        `}} />
+      </head>
       <body>
         <AuthProvider>
           <ToastProvider>
-            <RouteGuard>
-              <Header />
-              <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                {children}
-              </main>
-            </RouteGuard>
+            <CartProvider>
+              <RouteGuard>
+                <Header />
+                <main style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                  {children}
+                </main>
+              </RouteGuard>
+            </CartProvider>
           </ToastProvider>
         </AuthProvider>
       </body>

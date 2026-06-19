@@ -46,7 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (pin === managerPin) {
       const newSession: Session = {
         role: 'MANAGER',
-        name: name.trim() || 'Maria Santos',
+        name: name.trim() || 'manager',
         loginTime: new Date()
       };
       setSession(newSession);
@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else if (pin === staffPin) {
       const newSession: Session = {
         role: 'STAFF',
-        name: name.trim() || 'Juan dela Cruz',
+        name: name.trim() || 'staff',
         loginTime: new Date()
       };
       setSession(newSession);

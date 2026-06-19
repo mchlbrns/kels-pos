@@ -36,7 +36,7 @@ export default function CatalogGrid({
     return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
   };
   const viteEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
-  const isDevMode = viteEnv?.VITE_DEV_MODE === 'true' || process.env.VITE_DEV_MODE === 'true';
+  const isDevMode = viteEnv?.VITE_DEV_MODE === 'true' || process.env.VITE_DEV_MODE === 'true' || process.env.NODE_ENV === 'development';
 
   const products = useLiveQuery(
     async () => {

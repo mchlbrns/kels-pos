@@ -1,15 +1,26 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { processSyncQueue } from '@/lib/sync';
 
 export function useOnlineStatus() {
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return navigator.onLine;
+    }
+    return true;
+  });
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsOnline(navigator.onLine);
+    // Process any pending sync items immediately if we are online on mount
+    if (typeof window !== 'undefined' && navigator.onLine) {
+      processSyncQueue();
+    }
 
-    const handleOnline = () => setIsOnline(true);
+    const handleOnline = () => {
+      setIsOnline(true);
+      processSyncQueue();
+    };
     const handleOffline = () => setIsOnline(false);
 
     window.addEventListener('online', handleOnline);
