@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import styles from './Header.module.css';
-import { ChevronDown, LogOut, Settings, User, ShoppingBag, Receipt, Package, TrendingUp, Sun, Moon, Store } from 'lucide-react';
+import { ChevronDown, LogOut, Settings, User, ShoppingBag, Receipt, Package, TrendingUp, Sun, Moon, Store, Download } from 'lucide-react';
 import { useState, useEffect } from "react";
 
 export default function Header() {
@@ -13,6 +13,23 @@ export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isInstallable, setIsInstallable] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleStatus = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        setIsInstallable(customEvent.detail.installable);
+      }
+    };
+
+    window.addEventListener('pwa-installable-status', handleStatus);
+    return () => {
+      window.removeEventListener('pwa-installable-status', handleStatus);
+    };
+  }, []);
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
@@ -73,6 +90,17 @@ export default function Header() {
       </div>
       
       <div className={styles.right}>
+        {isInstallable && (
+          <button 
+            onClick={() => window.dispatchEvent(new CustomEvent('trigger-pwa-install'))}
+            className={styles.installHeaderBtn}
+            title="Install POS App"
+            type="button"
+          >
+            <Download size={18} />
+            <span className={styles.installText}>Install App</span>
+          </button>
+        )}
         <button 
           onClick={toggleTheme} 
           className={styles.themeToggleBtn}
@@ -136,6 +164,18 @@ export default function Header() {
                   >
                     <Settings size={16} />
                     Settings
+                  </button>
+                )}
+                {isInstallable && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      window.dispatchEvent(new CustomEvent('trigger-pwa-install'));
+                    }}
+                  >
+                    <Download size={16} />
+                    Install App
                   </button>
                 )}
                 <button

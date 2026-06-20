@@ -1,11 +1,13 @@
 {
-  "name": "Omnichannel POS",
-  "short_name": "POS",
-  "description": "Custom Omnichannel POS & Loyalty System",
-  "start_url": "/",
+  "id": "/",
+  "name": "Kels POS Enterprise",
+  "short_name": "Kels POS",
+  "description": "Advanced Omnichannel POS & Loyalty System",
+  "start_url": "/pos",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
   "icons": [
     {
       "src": "/icons/icon-192x192.png",

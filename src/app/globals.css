@@ -490,7 +490,8 @@ button, input, select, textarea, a, .card, .tab-item {
   body * {
     visibility: hidden !important;
   }
-  #printable-receipt, #printable-receipt * {
+  #printable-receipt, #printable-receipt *,
+  #printable-report, #printable-report * {
     visibility: visible !important;
   }
   #printable-receipt {
@@ -505,6 +506,29 @@ button, input, select, textarea, a, .card, .tab-item {
     color: black !important;
     box-shadow: none !important;
     border: none !important;
+  }
+  #printable-report {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 20px !important;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  #printable-report * {
+    color: black !important;
+    background-color: transparent !important;
+    background: transparent !important;
+    border-color: #e2e8f0 !important;
+    box-shadow: none !important;
+  }
+  .no-print, .no-print * {
+    display: none !important;
+    visibility: hidden !important;
   }
 }
 

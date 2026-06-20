@@ -6,6 +6,7 @@ import { ToastProvider } from "@/context/ToastContext";
 import { CartProvider } from "@/context/CartContext";
 import RouteGuard from "@/components/RouteGuard/RouteGuard";
 import Header from "@/components/Header/Header";
+import PWAInstallPrompt from "@/components/PWAInstallPrompt/PWAInstallPrompt";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -48,6 +49,7 @@ export default function RootLayout({
                   {children}
                 </main>
               </RouteGuard>
+              <PWAInstallPrompt />
             </CartProvider>
           </ToastProvider>
         </AuthProvider>

@@ -17,12 +17,13 @@ const getLocalIPs = () => {
 
 const withPWA = withPWAInit({
   dest: 'public',
-  disable: process.env.NODE_ENV === 'development',
+  disable: process.env.NODE_ENV === 'development' && process.env.ENABLE_PWA_DEV !== 'true',
   register: true,
   skipWaiting: true,
 });
 
 const nextConfig = {
+  outputFileTracingRoot: process.cwd(),
   env: {
     VITE_STAFF_PIN: process.env.VITE_STAFF_PIN ?? '',
     VITE_MANAGER_PIN: process.env.VITE_MANAGER_PIN ?? '',

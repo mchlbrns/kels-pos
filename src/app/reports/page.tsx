@@ -22,6 +22,11 @@ export default function ReportsPage() {
     }
   }, []);
 
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [dateFilter, setDateFilter] = useState<'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'CUSTOM'>('TODAY');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+
   const [currency] = useState<'PHP' | 'USD'>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('pos_currency');
@@ -35,16 +40,94 @@ export default function ReportsPage() {
     return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
   };
 
-  const startOfDay = new Date();
-  startOfDay.setHours(0,0,0,0);
+  const getDateRange = () => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
 
-  const rawTodayOrders = useLiveQuery(() => 
-    db.orders.where('created_at').above(startOfDay.getTime()).toArray()
-  ) || [];
+    switch (dateFilter) {
+      case 'TODAY':
+        return { start: todayStart.getTime(), end: null };
+      case 'YESTERDAY': {
+        const yesterdayStart = new Date();
+        yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+        yesterdayStart.setHours(0, 0, 0, 0);
+        return { start: yesterdayStart.getTime(), end: todayStart.getTime() };
+      }
+      case 'LAST_7_DAYS': {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        sevenDaysAgo.setHours(0, 0, 0, 0);
+        return { start: sevenDaysAgo.getTime(), end: null };
+      }
+      case 'LAST_30_DAYS': {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        thirtyDaysAgo.setHours(0, 0, 0, 0);
+        return { start: thirtyDaysAgo.getTime(), end: null };
+      }
+      case 'CUSTOM': {
+        let start = 0;
+        let end = null;
+        if (customStartDate) {
+          const startDateObj = new Date(customStartDate);
+          startDateObj.setHours(0, 0, 0, 0);
+          start = startDateObj.getTime();
+        }
+        if (customEndDate) {
+          const endDateObj = new Date(customEndDate);
+          endDateObj.setHours(23, 59, 59, 999);
+          end = endDateObj.getTime();
+        }
+        return { start, end };
+      }
+      default:
+        return { start: todayStart.getTime(), end: null };
+    }
+  };
 
-  const todayOrders = rawTodayOrders.filter(
-    o => o.status === 'COMPLETED'
-  );
+  const getDateRangeLabel = () => {
+    const options: Intl.DateTimeFormatOptions = { month: 'long', day: 'numeric', year: 'numeric' };
+    const today = new Date();
+
+    switch (dateFilter) {
+      case 'TODAY':
+        return `Today, ${today.toLocaleDateString('en-US', options)}`;
+      case 'YESTERDAY': {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        return `Yesterday, ${yesterday.toLocaleDateString('en-US', options)}`;
+      }
+      case 'LAST_7_DAYS': {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        return `Last 7 Days (${sevenDaysAgo.toLocaleDateString('en-US', options)} - ${today.toLocaleDateString('en-US', options)})`;
+      }
+      case 'LAST_30_DAYS': {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        return `Last 30 Days (${thirtyDaysAgo.toLocaleDateString('en-US', options)} - ${today.toLocaleDateString('en-US', options)})`;
+      }
+      case 'CUSTOM': {
+        const startStr = customStartDate ? new Date(customStartDate).toLocaleDateString('en-US', options) : 'Beginning';
+        const endStr = customEndDate ? new Date(customEndDate).toLocaleDateString('en-US', options) : 'Today';
+        return `Custom Range (${startStr} - ${endStr})`;
+      }
+      default:
+        return `Today, ${today.toLocaleDateString('en-US', options)}`;
+    }
+  };
+
+  const { start, end } = getDateRange();
+
+  const rawFilteredOrders = useLiveQuery(() => {
+    return db.orders.where('created_at').aboveOrEqual(start).toArray();
+  }, [dateFilter, customStartDate, customEndDate]) || [];
+
+  const todayOrders = rawFilteredOrders.filter(o => {
+    if (o.status !== 'COMPLETED') return false;
+    if (end !== null && o.created_at > end) return false;
+    return true;
+  });
 
   const totalSales = todayOrders.reduce((sum, o) => sum + o.total, 0);
   const averageOrderValue = todayOrders.length > 0 ? totalSales / todayOrders.length : 0;
@@ -74,7 +157,7 @@ export default function ReportsPage() {
     .slice(0, 5);
 
   return (
-    <div className="reports-page-container">
+    <div className="reports-page-container" id="printable-report">
       
       {/* PAGE HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
@@ -96,13 +179,22 @@ export default function ReportsPage() {
             }}
           >
             <Calendar size={14} />
-            Today, {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+            {getDateRangeLabel()}
           </div>
         </div>
         
         {/* Actions */}
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="pos-btn pos-btn-ghost" style={{ height: '38px' }}>
+        <div style={{ display: 'flex', gap: '8px' }} className="no-print">
+          <button 
+            onClick={() => setShowFilterPanel(!showFilterPanel)}
+            className="pos-btn pos-btn-ghost" 
+            style={{ 
+              height: '38px',
+              backgroundColor: showFilterPanel ? 'var(--bg-accent)' : 'transparent',
+              borderColor: showFilterPanel ? 'var(--primary)' : 'var(--border)',
+              color: showFilterPanel ? 'var(--text-primary)' : 'var(--text-secondary)'
+            }}
+          >
             <Filter size={16} />
             Filter
           </button>
@@ -116,6 +208,65 @@ export default function ReportsPage() {
           </button>
         </div>
       </div>
+
+      {/* FILTER PANEL */}
+      {showFilterPanel && (
+        <div 
+          className="no-print"
+          style={{ 
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '16px', 
+            padding: '16px', 
+            backgroundColor: 'var(--bg-surface)', 
+            border: '1px solid var(--border)', 
+            borderRadius: 'var(--radius-md)', 
+            marginBottom: '24px',
+            alignItems: 'center'
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Time Period</span>
+            <select
+              className="pos-select"
+              style={{ width: '180px', height: '38px' }}
+              value={dateFilter}
+              onChange={e => setDateFilter(e.target.value as 'TODAY' | 'YESTERDAY' | 'LAST_7_DAYS' | 'LAST_30_DAYS' | 'CUSTOM')}
+            >
+              <option value="TODAY">Today</option>
+              <option value="YESTERDAY">Yesterday</option>
+              <option value="LAST_7_DAYS">Last 7 Days</option>
+              <option value="LAST_30_DAYS">Last 30 Days</option>
+              <option value="CUSTOM">Custom Range</option>
+            </select>
+          </div>
+
+          {dateFilter === 'CUSTOM' && (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>From</span>
+                <input 
+                  type="date" 
+                  className="pos-input"
+                  style={{ height: '38px', width: '150px' }}
+                  value={customStartDate}
+                  onChange={e => setCustomStartDate(e.target.value)}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>To</span>
+                <input 
+                  type="date" 
+                  className="pos-input"
+                  style={{ height: '38px', width: '150px' }}
+                  value={customEndDate}
+                  onChange={e => setCustomEndDate(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* KPI STAT CARDS ROW */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>

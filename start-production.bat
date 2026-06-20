@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 echo ===================================================
 echo KELS POS - Production Environment Runner
 echo ===================================================
